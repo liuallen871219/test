@@ -210,26 +210,30 @@ across re-runs with different seeds than by any single run's #1.
 ## Task 4 — Backtest (`hfgi_pro/backtest.py`)
 
 Contrarian strategy, but scaling in rather than going all-in the moment
-`HFGI` first crosses below 30: three tiers at `HFGI < 30 / 20 / 10`, each
-adding a fraction of a full position (at most one tier fires per day),
-then a full exit once `HFGI > 70`. Decisions use `HFGI_Smoothed`, not raw
-`HFGI` (falls back to `HFGI` if a hand-built table has no `HFGI_Smoothed`
-column) — see Task 3. Two opposite sizing philosophies, both
-in `config.ADD_ON_STRATEGIES`:
+`HFGI` first crosses below 30: six tiers at `HFGI < 30 / 25 / 20 / 15 / 10
+/ 5` (5 points apart), each adding a fraction of a full position (at most
+one tier fires per day), then a full exit once `HFGI > 70`. An earlier
+version used only 3 tiers spaced 10 points apart (30/20/10) — twice the
+gap meant a much bigger price move was needed to cross from one tier to
+the next; halving the spacing means each individual step triggers more
+gradually (though the deepest tiers, e.g. `HFGI < 5`, still legitimately
+need a large move — that hasn't changed, since the threshold itself is
+the same level as before). Decisions use `HFGI_Smoothed`, not raw `HFGI`
+(falls back to `HFGI` if a hand-built table has no `HFGI_Smoothed`
+column) — see Task 3. Two opposite sizing philosophies, both in
+`config.ADD_ON_STRATEGIES`:
 
-- **`pyramid`** (金字塔): 50% / 30% / 20% — biggest tranche at the first,
-  least extreme signal, tapering down as fear deepens. Caps risk if fear
-  keeps deepening into a real crash.
-- **`inverse_pyramid`** (倒金字塔): 20% / 30% / 50% — smallest tranche
+- **`pyramid`** (金字塔): 30/25/20/12/8/5% — biggest tranches at the
+  first, least extreme signals, tapering down as fear deepens. Caps risk
+  if fear keeps deepening into a real crash.
+- **`inverse_pyramid`** (倒金字塔): 5/8/12/20/25/30% — smallest tranches
   first, growing as fear deepens. Commits the most capital at the least
   certain, most volatile point — higher risk, higher payoff if that point
   turns out to mark the actual bottom.
 
 Both fire on the same days (identical thresholds), just sized oppositely.
 `run.py` backtests every watchlist ticker under both and writes both to
-`data/backtest_summary.json`; in this project's data, `pyramid` currently
-comes out ahead on Sharpe for `QQQ`/`NVDA`/`TSM`/`ASML`, `inverse_pyramid`
-ahead for `ALAB` (n=8 trades — not enough to read much into that).
+`data/backtest_summary.json`.
 
 Reports CAGR, Sharpe Ratio, Max Drawdown, and Win Rate. A round-trip
 transaction cost (`config.BACKTEST_TRANSACTION_COST_BPS`, default 10bps)

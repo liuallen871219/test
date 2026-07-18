@@ -276,9 +276,13 @@ def test_backtest_add_on_tiers_scale_position_in_as_fear_deepens():
     """A steadily worsening HFGI should fill tiers one at a time rather than
     going all-in on the first breach, and pyramid vs. inverse_pyramid should
     size those tranches oppositely even though they fire on the same days."""
-    index = pd.bdate_range("2021-01-04", periods=6)
-    hfgi = pd.Series([50, 25, 25, 15, 15, 5], index=index)
-    close = pd.Series([100.0, 100.0, 101.0, 101.0, 102.0, 102.0], index=index)
+    n_tiers = len(config.ADD_ON_STRATEGIES["pyramid"])
+    index = pd.bdate_range("2021-01-04", periods=n_tiers + 1)
+    # One value above the first threshold (no fire), then one value strictly
+    # between each successive pair of thresholds (30/25/20/15/10/5) so
+    # exactly one tier fires per day, in order.
+    hfgi = pd.Series([50, 27, 22, 17, 12, 7, 3], index=index)
+    close = pd.Series([100.0 + i for i in range(n_tiers + 1)], index=index)
     hfgi_df = pd.DataFrame({"HFGI": hfgi, "Close": close})
 
     pyramid = run_backtest(hfgi_df, tiers=config.ADD_ON_STRATEGIES["pyramid"], transaction_cost_bps=0)
@@ -286,9 +290,9 @@ def test_backtest_add_on_tiers_scale_position_in_as_fear_deepens():
 
     # Same trigger days for both (identical thresholds), fully filled by the end.
     assert (pyramid.tranche_count == inverse.tranche_count).all()
-    assert pyramid.tranche_count.iloc[-1] == 3
+    assert pyramid.tranche_count.iloc[-1] == n_tiers
 
-    # Pyramid front-loads size (0.5 first tranche); inverse_pyramid back-loads it (0.5 last).
+    # Pyramid front-loads size (biggest first tranche); inverse_pyramid back-loads it.
     assert pyramid.positions.iloc[1] > inverse.positions.iloc[1]
     assert np.isclose(pyramid.positions.iloc[-1], 1.0)
     assert np.isclose(inverse.positions.iloc[-1], 1.0)

@@ -167,28 +167,38 @@ STATE_THRESHOLDS = {
 # --- Backtest --------------------------------------------------------------
 # Scale into the position in tiers as fear deepens (加倉 / averaging in),
 # rather than going all-in the moment HFGI first crosses below 30. Each
-# tier fires at most once per holding cycle, in order, at the same three
-# HFGI thresholds (30/20/10); the position exits fully once HFGI recovers
-# past BACKTEST_SELL_THRESHOLD. Two opposite sizing philosophies:
+# tier fires at most once per holding cycle, in order, at HFGI thresholds
+# 5 points apart (30/25/20/15/10/5) — the original 3 tiers (30/20/10) were
+# spaced 10 points apart, which meant a huge price move was needed to
+# cross from one tier to the next; 6 tiers at half that spacing means each
+# step needs a much smaller move, so add-ons trigger more gradually. The
+# position exits fully once HFGI recovers past BACKTEST_SELL_THRESHOLD.
+# Two opposite sizing philosophies:
 #
-#   pyramid         - biggest tranche first, tapering down as fear deepens
+#   pyramid         - biggest tranches first, tapering down as fear deepens
 #                      (most conviction at the first, least extreme signal;
 #                      caps risk if fear keeps deepening into a real crash)
-#   inverse_pyramid - smallest tranche first, growing as fear deepens
+#   inverse_pyramid - smallest tranches first, growing as fear deepens
 #                      (most conviction at the most extreme signal; commits
 #                      the most capital at the least certain, most volatile
 #                      point — higher risk, higher payoff if it marks the
 #                      actual bottom)
 ADD_ON_STRATEGIES = {
     "pyramid": [
-        {"threshold": 30, "fraction": 0.5},
-        {"threshold": 20, "fraction": 0.3},
-        {"threshold": 10, "fraction": 0.2},
+        {"threshold": 30, "fraction": 0.30},
+        {"threshold": 25, "fraction": 0.25},
+        {"threshold": 20, "fraction": 0.20},
+        {"threshold": 15, "fraction": 0.12},
+        {"threshold": 10, "fraction": 0.08},
+        {"threshold": 5, "fraction": 0.05},
     ],
     "inverse_pyramid": [
-        {"threshold": 30, "fraction": 0.2},
-        {"threshold": 20, "fraction": 0.3},
-        {"threshold": 10, "fraction": 0.5},
+        {"threshold": 30, "fraction": 0.05},
+        {"threshold": 25, "fraction": 0.08},
+        {"threshold": 20, "fraction": 0.12},
+        {"threshold": 15, "fraction": 0.20},
+        {"threshold": 10, "fraction": 0.25},
+        {"threshold": 5, "fraction": 0.30},
     ],
 }
 DEFAULT_ADD_ON_STRATEGY = "pyramid"
