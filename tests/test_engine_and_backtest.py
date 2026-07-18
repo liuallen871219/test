@@ -112,7 +112,8 @@ def test_backtest_runs_and_produces_bounded_metrics():
     result = run_backtest(hfgi_df)
     summary = result.summary()
 
-    assert result.positions.isin([0, 1]).all()
+    assert (result.positions >= 0).all() and (result.positions <= 1.0 + 1e-9).all()
+    assert result.tranche_count.between(0, 3).all()
     assert -1.0 <= summary["max_drawdown"] <= 0.0
     if summary["num_trades"] > 0:
         assert 0.0 <= summary["win_rate"] <= 1.0
@@ -132,3 +133,43 @@ def test_backtest_transaction_costs_reduce_returns():
             costly.trades["return"].values,
             free.trades["return"].values - 2 * (50 / 10_000.0),
         )
+
+
+def test_backtest_add_on_tiers_scale_position_in_as_fear_deepens():
+    """A steadily worsening HFGI should fill tiers one at a time rather than
+    going all-in on the first breach, and pyramid vs. inverse_pyramid should
+    size those tranches oppositely even though they fire on the same days."""
+    index = pd.bdate_range("2021-01-04", periods=6)
+    hfgi = pd.Series([50, 25, 25, 15, 15, 5], index=index)
+    close = pd.Series([100.0, 100.0, 101.0, 101.0, 102.0, 102.0], index=index)
+    hfgi_df = pd.DataFrame({"HFGI": hfgi, "Close": close})
+
+    pyramid = run_backtest(hfgi_df, tiers=config.ADD_ON_STRATEGIES["pyramid"], transaction_cost_bps=0)
+    inverse = run_backtest(hfgi_df, tiers=config.ADD_ON_STRATEGIES["inverse_pyramid"], transaction_cost_bps=0)
+
+    # Same trigger days for both (identical thresholds), fully filled by the end.
+    assert (pyramid.tranche_count == inverse.tranche_count).all()
+    assert pyramid.tranche_count.iloc[-1] == 3
+
+    # Pyramid front-loads size (0.5 first tranche); inverse_pyramid back-loads it (0.5 last).
+    assert pyramid.positions.iloc[1] > inverse.positions.iloc[1]
+    assert np.isclose(pyramid.positions.iloc[-1], 1.0)
+    assert np.isclose(inverse.positions.iloc[-1], 1.0)
+
+
+def test_backtest_recommendation_reflects_current_state():
+    index = pd.bdate_range("2021-01-04", periods=3)
+    tiers = config.ADD_ON_STRATEGIES["pyramid"]
+
+    waiting = pd.DataFrame({"HFGI": [50.0, 50.0, 50.0], "Close": [100.0, 101.0, 102.0]}, index=index)
+    result = run_backtest(waiting, tiers=tiers)
+    assert result.recommendation["action"] == "wait"
+
+    ready_to_enter = pd.DataFrame({"HFGI": [50.0, 50.0, 25.0], "Close": [100.0, 101.0, 102.0]}, index=index)
+    result = run_backtest(ready_to_enter, tiers=tiers)
+    assert result.recommendation["action"] == "enter"
+
+    ready_to_exit = pd.DataFrame({"HFGI": [25.0, 15.0, 75.0]}, index=index)
+    ready_to_exit["Close"] = [100.0, 101.0, 102.0]
+    result = run_backtest(ready_to_exit, tiers=tiers)
+    assert result.recommendation["action"] == "exit"

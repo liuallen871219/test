@@ -22,7 +22,21 @@ MARKET_VOLATILITY_TICKER = "^VIX"
 #   NVDA  - Nvidia (AI/GPU compute)
 #   TSM   - Taiwan Semiconductor (foundry)
 #   ASML  - ASML Holding (lithography equipment)
-WATCHLIST = [PRIMARY_TICKER, "DRAM", "QQQ", "ALAB", "NVDA", "TSM", "ASML"]
+#   PLTR  - Palantir Technologies (AI/data analytics software)
+#   MRVL  - Marvell Technology (data-infrastructure semiconductors)
+#   GLW   - Corning (fiber optic cable/glass)
+#   LITE  - Lumentum Holdings (optical components)
+#   COHR  - Coherent Corp (photonics/optical components)
+#   AAOI  - Applied Optoelectronics (optical networking components)
+#   SMH   - VanEck Semiconductor ETF (broad semiconductor-sector index)
+#   SOXX  - iShares Semiconductor ETF (broad semiconductor-sector index)
+# SMH/SOXX double as both a WATCHLIST subject (a sector-wide fear/greed
+# reading in their own right) and the SECTOR_BENCHMARK_TICKERS used for
+# every other subject's Relative Strength factor.
+WATCHLIST = [
+    PRIMARY_TICKER, "DRAM", "QQQ", "ALAB", "NVDA", "TSM", "ASML",
+    "PLTR", "MRVL", "GLW", "LITE", "COHR", "AAOI", "SMH", "SOXX",
+]
 
 TICKERS = sorted(set(
     WATCHLIST
@@ -80,7 +94,34 @@ STATE_THRESHOLDS = {
 }
 
 # --- Backtest --------------------------------------------------------------
-BACKTEST_BUY_THRESHOLD = 30
+# Scale into the position in tiers as fear deepens (加倉 / averaging in),
+# rather than going all-in the moment HFGI first crosses below 30. Each
+# tier fires at most once per holding cycle, in order, at the same three
+# HFGI thresholds (30/20/10); the position exits fully once HFGI recovers
+# past BACKTEST_SELL_THRESHOLD. Two opposite sizing philosophies:
+#
+#   pyramid         - biggest tranche first, tapering down as fear deepens
+#                      (most conviction at the first, least extreme signal;
+#                      caps risk if fear keeps deepening into a real crash)
+#   inverse_pyramid - smallest tranche first, growing as fear deepens
+#                      (most conviction at the most extreme signal; commits
+#                      the most capital at the least certain, most volatile
+#                      point — higher risk, higher payoff if it marks the
+#                      actual bottom)
+ADD_ON_STRATEGIES = {
+    "pyramid": [
+        {"threshold": 30, "fraction": 0.5},
+        {"threshold": 20, "fraction": 0.3},
+        {"threshold": 10, "fraction": 0.2},
+    ],
+    "inverse_pyramid": [
+        {"threshold": 30, "fraction": 0.2},
+        {"threshold": 20, "fraction": 0.3},
+        {"threshold": 10, "fraction": 0.5},
+    ],
+}
+DEFAULT_ADD_ON_STRATEGY = "pyramid"
+BACKTEST_BUY_THRESHOLD = ADD_ON_STRATEGIES[DEFAULT_ADD_ON_STRATEGY][0]["threshold"]  # display/back-compat
 BACKTEST_SELL_THRESHOLD = 70
 # Round-trip cost (commission + slippage) charged on every entry and exit,
 # in basis points of the trade price. A prior version ran 39 trades over

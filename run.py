@@ -2,15 +2,19 @@
 
 Downloads/caches OHLCV data for the configured ticker universe, computes the
 HFGI composite index for each ticker in the watchlist, and runs the
-contrarian backtest for each. Results are written under `data/`:
+contrarian add-on backtest for each under both sizing strategies (pyramid
+and inverse_pyramid, see config.ADD_ON_STRATEGIES). Results are written
+under `data/`:
 
-  data/<TICKER>.parquet                  raw OHLCV per ticker
-  data/hfgi_<TICKER>.parquet             HFGI, State, and each weighted
-                                          sub-score, per watchlist ticker
-  data/backtest_<TICKER>_equity.parquet  strategy equity curve, per ticker
-  data/backtest_<TICKER>_trades.csv      individual trades, per ticker
-  data/backtest_summary.json             CAGR / Sharpe / Max Drawdown /
-                                          Win Rate for every watchlist ticker
+  data/<TICKER>.parquet                          raw OHLCV per ticker
+  data/hfgi_<TICKER>.parquet                     HFGI, State, and each
+                                                  weighted sub-score
+  data/backtest_<TICKER>_<STRATEGY>_equity.parquet  strategy equity curve
+  data/backtest_<TICKER>_<STRATEGY>_trades.csv      individual tranche trades
+  data/backtest_summary.json                     CAGR / Sharpe / Max
+                                                  Drawdown / Win Rate /
+                                                  current recommendation,
+                                                  for every ticker x strategy
 """
 
 from __future__ import annotations
@@ -24,6 +28,7 @@ from hfgi_pro import config
 from hfgi_pro.backtest import run_backtest
 from hfgi_pro.data_loader import DataLoader
 from hfgi_pro.engine import HFGIEngine
+from hfgi_pro.price_target import estimate_price_targets
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -64,16 +69,44 @@ def main() -> None:
         hfgi_df.to_parquet(data_dir / f"hfgi_{tag}.parquet")
         logger.info("Saved %s HFGI scores -> %s", subject, data_dir / f"hfgi_{tag}.parquet")
 
-        result = run_backtest(hfgi_df)
-        summary = result.summary()
-        all_summaries[subject] = summary
-        result.trades.to_csv(data_dir / f"backtest_{tag}_trades.csv", index=False)
-        result.equity_curve.to_frame("Equity").to_parquet(data_dir / f"backtest_{tag}_equity.parquet")
-        logger.info("%s backtest summary: %s", subject, summary)
-
         print(f"\n=== {subject}: HFGI (last 5 rows) ===")
         print(hfgi_df[["HFGI", "State"]].tail())
-        print(f"{subject} backtest summary: {summary}")
+
+        tier_thresholds = [t["threshold"] for t in config.ADD_ON_STRATEGIES[config.DEFAULT_ADD_ON_STRATEGY]]
+        all_thresholds = tier_thresholds + [config.BACKTEST_SELL_THRESHOLD]
+        price_targets = estimate_price_targets(price_data, subject, all_thresholds, engine=engine)
+        last_close = float(hfgi_df["Close"].dropna().iloc[-1]) if hfgi_df["Close"].notna().any() else None
+
+        print(f"{subject} 加倉/出場目標價格 (現價 {last_close}):")
+        for strategy_name, tiers in config.ADD_ON_STRATEGIES.items():
+            print(f"  [{strategy_name}]")
+            for tier in tiers:
+                price = price_targets.get(tier["threshold"])
+                pct = f"{(price / last_close - 1) * 100:+.1f}%" if price and last_close else "N/A"
+                price_str = f"{price:.2f}" if price else "無法僅靠價格達成(需搭配成交量/VIX變化)"
+                print(f"    HFGI<{tier['threshold']} 加碼{tier['fraction'] * 100:.0f}% -> 目標價 {price_str} ({pct})")
+        exit_price = price_targets.get(config.BACKTEST_SELL_THRESHOLD)
+        exit_pct = f"{(exit_price / last_close - 1) * 100:+.1f}%" if exit_price and last_close else "N/A"
+        exit_str = f"{exit_price:.2f}" if exit_price else "無法僅靠價格達成(需搭配成交量/VIX變化)"
+        print(f"    HFGI>{config.BACKTEST_SELL_THRESHOLD} 全數出場 -> 目標價 {exit_str} ({exit_pct})")
+
+        all_summaries[subject] = {
+            "last_close": last_close,
+            "price_targets": {str(k): v for k, v in price_targets.items()},
+        }
+        for strategy_name, tiers in config.ADD_ON_STRATEGIES.items():
+            result = run_backtest(hfgi_df, tiers=tiers)
+            summary = result.summary()
+            summary["recommendation"] = result.recommendation
+            all_summaries[subject][strategy_name] = summary
+
+            result.trades.to_csv(data_dir / f"backtest_{tag}_{strategy_name}_trades.csv", index=False)
+            result.equity_curve.to_frame("Equity").to_parquet(
+                data_dir / f"backtest_{tag}_{strategy_name}_equity.parquet"
+            )
+            logger.info("%s [%s] backtest summary: %s", subject, strategy_name, summary)
+            print(f"{subject} [{strategy_name}]: {summary}")
+            print(f"  -> {result.recommendation['message']}")
 
     (data_dir / "backtest_summary.json").write_text(json.dumps(all_summaries, indent=2, default=str))
     print("\n=== HFGI Pro pipeline complete ===")

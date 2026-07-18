@@ -4,7 +4,12 @@ A Fear & Greed Index toolkit focused on SK Hynix (SKHY / 000660.KS), built
 against the semiconductor sector (SMH, SOXX). The same engine also runs on
 a watchlist of other memory/semiconductor-adjacent tickers: `DRAM`
 (Roundhill Memory ETF), `QQQ` (Nasdaq-100), `ALAB` (Astera Labs), `NVDA`
-(Nvidia), `TSM` (Taiwan Semiconductor), and `ASML` (ASML Holding).
+(Nvidia), `TSM` (Taiwan Semiconductor), `ASML` (ASML Holding), `PLTR`
+(Palantir), `MRVL` (Marvell), `GLW` (Corning), `LITE` (Lumentum), `COHR`
+(Coherent), `AAOI` (Applied Optoelectronics) — and `SMH`/`SOXX`
+themselves, which double as both the sector benchmark used for every
+other ticker's Relative Strength factor *and* a watchlist subject in
+their own right, i.e. a sector-wide semiconductor fear/greed reading.
 
 ## Setup
 
@@ -20,9 +25,9 @@ python run.py --start 2019-01-01 --end 2026-07-18
 python run.py --refresh             # bypass the cache and force re-download
 ```
 
-This downloads OHLCV data for every ticker in `config.TICKERS` (the
-watchlist `SKHY`/`DRAM`/`QQQ`/`ALAB`/`NVDA`/`TSM`/`ASML`, plus `000660.KS`,
-`SMH`, `SOXX`, `^VIX`) via `yfinance` through a reusable, caching `DataLoader`
+This downloads OHLCV data for every ticker in `config.TICKERS` (the full
+`config.WATCHLIST` plus `000660.KS` and `^VIX`) via `yfinance` through a
+reusable, caching `DataLoader`
 (`hfgi_pro/data_loader.py`), then runs the full pipeline (indicators → HFGI
 engine → backtest) **for each ticker in `config.WATCHLIST`** and writes
 everything under `data/`:
@@ -30,9 +35,10 @@ everything under `data/`:
 - `data/<TICKER>.parquet` — raw OHLCV per ticker
 - `data/hfgi_<TICKER>.parquet` — HFGI, State, and each weighted sub-score,
   per watchlist ticker
-- `data/backtest_<TICKER>_trades.csv` / `_equity.parquet` — per ticker
-- `data/backtest_summary.json` — CAGR / Sharpe / Max Drawdown / Win Rate
-  for every watchlist ticker, keyed by ticker
+- `data/backtest_<TICKER>_<STRATEGY>_trades.csv` / `_equity.parquet` — per
+  ticker, per add-on strategy (`pyramid` / `inverse_pyramid`, see Task 4)
+- `data/backtest_summary.json` — CAGR / Sharpe / Max Drawdown / Win Rate /
+  current recommendation, for every watchlist ticker x strategy
 
 Cached downloads live in `data/cache/` and are reused for up to 24h before a
 fresh download is attempted; date-range filtering is applied in memory on
@@ -130,14 +136,66 @@ across re-runs with different seeds than by any single run's #1.
 
 ## Task 4 — Backtest (`hfgi_pro/backtest.py`)
 
-Contrarian long-only strategy: buy when `HFGI < 30`, sell when `HFGI > 70`.
-Reports CAGR, Sharpe Ratio, Max Drawdown, and Win Rate.
+Contrarian strategy, but scaling in rather than going all-in the moment
+`HFGI` first crosses below 30: three tiers at `HFGI < 30 / 20 / 10`, each
+adding a fraction of a full position (at most one tier fires per day),
+then a full exit once `HFGI > 70`. Two opposite sizing philosophies, both
+in `config.ADD_ON_STRATEGIES`:
 
-A round-trip transaction cost (`config.BACKTEST_TRANSACTION_COST_BPS`,
-default 10bps) is charged on every entry and every exit — a prior version
-ran 39+ trades over QQQ's history completely frictionless, which
-meaningfully overstated CAGR and Sharpe. Pass `transaction_cost_bps=0` to
-`run_backtest(...)` to see the frictionless numbers for comparison.
+- **`pyramid`** (金字塔): 50% / 30% / 20% — biggest tranche at the first,
+  least extreme signal, tapering down as fear deepens. Caps risk if fear
+  keeps deepening into a real crash.
+- **`inverse_pyramid`** (倒金字塔): 20% / 30% / 50% — smallest tranche
+  first, growing as fear deepens. Commits the most capital at the least
+  certain, most volatile point — higher risk, higher payoff if that point
+  turns out to mark the actual bottom.
+
+Both fire on the same days (identical thresholds), just sized oppositely.
+`run.py` backtests every watchlist ticker under both and writes both to
+`data/backtest_summary.json`; in this project's data, `pyramid` currently
+comes out ahead on Sharpe for `QQQ`/`NVDA`/`TSM`/`ASML`, `inverse_pyramid`
+ahead for `ALAB` (n=8 trades — not enough to read much into that).
+
+Reports CAGR, Sharpe Ratio, Max Drawdown, and Win Rate. A round-trip
+transaction cost (`config.BACKTEST_TRANSACTION_COST_BPS`, default 10bps)
+is charged proportional to the size of each entry/add-on/exit — a prior
+all-in-one-shot version ran 39+ trades over QQQ's history completely
+frictionless, which meaningfully overstated CAGR and Sharpe. Pass
+`transaction_cost_bps=0` to `run_backtest(...)` to see the frictionless
+numbers for comparison.
+
+**加倉建議 (`result.recommendation`)**: every `run_backtest(...)` call
+also returns the actionable next step for the *latest* row — "尚未到進場
+區間" (not yet in the entry zone), "建議建立第 1/3 批倉位" (enter tranche
+1), "建議加碼第 2/3 批" (add tranche 2), "持有中,等待…" (hold, waiting for
+the next add-on or exit level), "已滿倉,續抱" (fully in, hold), or "建議
+全數出場" (exit). It's computed from the state as of *yesterday's* close
+plus *today's* `HFGI` reading — i.e. what today's number calls for you to
+do next, not a description of what the backtest already auto-filled today.
+
+### Add-on target prices (`hfgi_pro/price_target.py`)
+
+`run.py` also prints, per ticker, the estimated closing price that would
+trigger each add-on tier and the full exit — "加倉目標價格及倉位比例
+對應". HFGI depends on far more than price (volume, relative strength, ADR
+premium, VIX), so there's no clean algebra from "HFGI < 20" to "price =
+$X". `estimate_price_targets(...)` holds every non-price-derived
+sub-score at today's actual value, re-derives what a hypothetical
+closing price would do to the price-derived ones (Price Momentum, RSI,
+MACD, ATR, Drawdown, Relative Strength, and ADR Premium for `SKHY`) via
+the same one-step EWM/rolling update the live indicators use, and
+bisection-searches for the price where the resulting HFGI matches each
+tier threshold.
+
+This is an estimate, not a guarantee — it assumes the hypothetical day's
+High/Low collapse to its Close, and holds Volume/Relative
+Strength/VIX fixed even though a real move that size would likely shift
+those too. It's also honest about being sometimes *unreachable*: a large
+single-day move raises ATR (and thus reads as more "fear," pulling the
+score back down) regardless of direction, so above some magnitude further
+price movement stops helping and a tier can show "無法僅靠價格達成"
+(not achievable by price alone — would need the other factors, like
+volume or VIX, to move too).
 
 ## Task 5 — Dashboard (`dashboard.py`)
 

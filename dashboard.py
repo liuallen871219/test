@@ -26,10 +26,22 @@ def load_data(subject: str):
     return hfgi_df, price_df
 
 
+STRATEGY_LABELS = {
+    "pyramid": "金字塔(先大後小,前重後輕)",
+    "inverse_pyramid": "倒金字塔(先小後大,越跌加越多)",
+}
+
+
 def main() -> None:
     st.title("HFGI Pro — Fear & Greed Index Dashboard")
 
-    subject = st.selectbox("追蹤標的", config.WATCHLIST, index=0)
+    col_subject, col_strategy = st.columns(2)
+    subject = col_subject.selectbox("追蹤標的", config.WATCHLIST, index=0)
+    strategy_name = col_strategy.selectbox(
+        "加碼策略", list(config.ADD_ON_STRATEGIES.keys()),
+        format_func=lambda s: STRATEGY_LABELS.get(s, s), index=0,
+    )
+    tiers = config.ADD_ON_STRATEGIES[strategy_name]
 
     try:
         hfgi_df, price_df = load_data(subject)
@@ -39,7 +51,17 @@ def main() -> None:
 
     engine = HFGIEngine()
     ind = engine.compute_indicators({subject: price_df}, subject=subject)
-    result = run_backtest(hfgi_df)
+    result = run_backtest(hfgi_df, tiers=tiers)
+
+    tier_desc = " → ".join(f"HFGI<{t['threshold']} 加碼{t['fraction'] * 100:.0f}%" for t in tiers)
+    st.caption(f"{STRATEGY_LABELS.get(strategy_name, strategy_name)}:{tier_desc} → HFGI>{config.BACKTEST_SELL_THRESHOLD} 全出場")
+
+    recommendation = result.recommendation
+    action_style = {
+        "enter": st.success, "add": st.success, "exit": st.warning,
+        "hold": st.info, "hold_full": st.info, "wait": st.info, "no_data": st.error,
+    }.get(recommendation["action"], st.info)
+    action_style(f"**目前建議**:{recommendation['message']}")
 
     has_adr = subject == config.PRIMARY_TICKER and hfgi_df["ADR_Premium_Raw"].notna().any()
 
@@ -75,21 +97,28 @@ def main() -> None:
     fig_hfgi.update_layout(title=f"{subject} — HFGI 曲線", yaxis_range=[0, 100], height=350)
     st.plotly_chart(fig_hfgi, use_container_width=True)
 
-    # --- Price chart with Buy/Sell signals --------------------------------
+    # --- Price chart with add-on entries / exits --------------------------
     fig_price = go.Figure()
     fig_price.add_trace(go.Scatter(x=ind.index, y=ind["Close"], name="收盤價", line=dict(color="steelblue")))
     for w in config.SMA_WINDOWS:
         fig_price.add_trace(go.Scatter(x=ind.index, y=ind[f"SMA{w}"], name=f"SMA{w}", line=dict(width=1)))
     if len(result.trades):
+        # Marker size scales with each tranche's fraction, so a pyramid's big
+        # first bite and an inverse_pyramid's big last bite are visible.
+        entry_sizes = 10 + result.trades["fraction"] * 40
         fig_price.add_trace(go.Scatter(
             x=result.trades["entry_date"], y=result.trades["entry_price"],
-            mode="markers", name="Buy", marker=dict(symbol="triangle-up", size=12, color="green"),
+            mode="markers", name="加碼進場",
+            marker=dict(symbol="triangle-up", size=entry_sizes, color="green"),
+            text=[f"+{f * 100:.0f}%" for f in result.trades["fraction"]],
+            hovertemplate="%{x}<br>價格 %{y:.2f}<br>加碼 %{text}<extra></extra>",
         ))
+        exits = result.trades.drop_duplicates(subset=["exit_date"])
         fig_price.add_trace(go.Scatter(
-            x=result.trades["exit_date"], y=result.trades["exit_price"],
-            mode="markers", name="Sell", marker=dict(symbol="triangle-down", size=12, color="red"),
+            x=exits["exit_date"], y=exits["exit_price"],
+            mode="markers", name="出場", marker=dict(symbol="triangle-down", size=14, color="red"),
         ))
-    fig_price.update_layout(title=f"{subject} — 股價 & Buy/Sell 訊號", height=400)
+    fig_price.update_layout(title=f"{subject} — 股價 & 加碼/出場訊號", height=400)
     st.plotly_chart(fig_price, use_container_width=True)
 
     # --- RSI / MACD / Volume / VIX / ADR Premium in a 2x3 grid --------------
