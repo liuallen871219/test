@@ -55,6 +55,8 @@ SCORE_WEIGHT_KEYS = {
     "ADRPremium_Score": "adr_premium",
     "MarketVolatility_Score": "market_volatility",
     "Breadth_Score": "breadth",
+    "SafeHaven_Score": "safe_haven",
+    "CreditAppetite_Score": "credit_appetite",
 }
 
 
@@ -174,6 +176,31 @@ class HFGIEngine:
             return pd.Series(index=ind.index, dtype=float)
         return pd.concat(above_flags, axis=1).mean(axis=1, skipna=True) * 100
 
+    def _safe_haven_raw(self, ind: pd.DataFrame, price_data: Dict[str, pd.DataFrame]) -> pd.Series:
+        """Safe Haven Demand (CNN Fear & Greed Index component): subject's
+        momentum vs. long Treasuries' (config.SAFE_HAVEN_TICKER). Stocks
+        underperforming bonds reads as flight-to-safety fear, regardless of
+        what any single stock's own indicators say.
+        """
+        ticker = config.SAFE_HAVEN_TICKER
+        if ticker not in price_data:
+            return pd.Series(index=ind.index, dtype=float)
+        bond_roc = indicators.roc(price_data[ticker]["Close"], self.momentum_window).reindex(ind.index)
+        return ind["ROC"] - bond_roc
+
+    def _credit_appetite_raw(self, ind: pd.DataFrame, price_data: Dict[str, pd.DataFrame]) -> pd.Series:
+        """Junk Bond Demand (CNN Fear & Greed Index component), proxied by
+        high-yield vs. investment-grade credit momentum (HYG vs. IEF) since
+        yield-spread data isn't available here. Same value for every
+        subject — a macro overlay, not idiosyncratic to any one ticker.
+        """
+        risk_ticker, safe_ticker = config.CREDIT_RISK_TICKER, config.CREDIT_SAFE_TICKER
+        if risk_ticker not in price_data or safe_ticker not in price_data:
+            return pd.Series(index=ind.index, dtype=float)
+        risk_roc = indicators.roc(price_data[risk_ticker]["Close"], self.momentum_window).reindex(ind.index)
+        safe_roc = indicators.roc(price_data[safe_ticker]["Close"], self.momentum_window).reindex(ind.index)
+        return risk_roc - safe_roc
+
     def compute_subscores(self, price_data: Dict[str, pd.DataFrame], subject: str = None):
         """Compute `subject`'s raw indicators and 0-100 sub-scores, independent
         of any particular weighting. Returns (ind, scores, extras); `extras`
@@ -190,6 +217,8 @@ class HFGIEngine:
         adr_premium_raw = self._adr_premium_raw(ind, price_data, subject)
         vix_close = self._vix_close(ind, price_data)
         breadth_raw = self._breadth_raw(ind, price_data, subject)
+        safe_haven_raw = self._safe_haven_raw(ind, price_data)
+        credit_appetite_raw = self._credit_appetite_raw(ind, price_data)
 
         scores = pd.DataFrame(index=ind.index)
         scores["PriceMomentum_Score"] = _percentile_score(ind["ROC"], self.rolling_window)
@@ -211,12 +240,18 @@ class HFGIEngine:
         # Higher breadth (more peers above their own SMA) already reads as
         # greed in the same direction, so no inversion needed here.
         scores["Breadth_Score"] = _percentile_score(breadth_raw, self.rolling_window)
+        # Outperforming bonds / high-yield outperforming investment-grade
+        # both already read as greed in the same direction — no inversion.
+        scores["SafeHaven_Score"] = _percentile_score(safe_haven_raw, self.rolling_window)
+        scores["CreditAppetite_Score"] = _percentile_score(credit_appetite_raw, self.rolling_window)
 
         extras = {
             "adr_premium_raw": adr_premium_raw,
             "relative_strength_raw": relative_strength_raw,
             "vix_close": vix_close,
             "breadth_raw": breadth_raw,
+            "safe_haven_raw": safe_haven_raw,
+            "credit_appetite_raw": credit_appetite_raw,
             "lookback_days": _lookback_count(ind["ROC"], self.rolling_window),
         }
         return ind, scores, extras
@@ -242,6 +277,8 @@ class HFGIEngine:
         result["RelativeStrength_Raw"] = extras["relative_strength_raw"]
         result["VIX_Close"] = extras["vix_close"]
         result["Breadth_Raw"] = extras["breadth_raw"]
+        result["SafeHaven_Raw"] = extras["safe_haven_raw"]
+        result["CreditAppetite_Raw"] = extras["credit_appetite_raw"]
         # How many days of history back each row's percentile-ranked
         # sub-scores were actually computed over (capped at rolling_window).
         # Low values (e.g. a ticker with only a few months of trading) mean

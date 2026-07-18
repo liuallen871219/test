@@ -1,10 +1,11 @@
 """Estimate the closing price that would produce a given HFGI level.
 
 HFGI depends on much more than price alone (volume, relative strength, ADR
-premium, VIX), so "what price gives HFGI=20" has no single algebraic
-answer. This holds every non-price-derived sub-score at its latest actual
-value, and for the price-derived ones (Price Momentum, RSI, MACD, ATR,
-Drawdown, Relative Strength, and — for the primary ticker — ADR Premium)
+premium, VIX, breadth, safe haven demand, credit appetite), so "what price
+gives HFGI=20" has no single algebraic answer. This holds every
+non-price-derived sub-score at its latest actual value, and for the
+price-derived ones (Price Momentum, RSI, MACD, ATR, Drawdown, Relative
+Strength, Safe Haven Demand, and — for the primary ticker — ADR Premium)
 re-derives what a hypothetical closing price today would do to each one
 via the same one-step EWM/rolling update the live indicators use, then
 bisection-searches for the price where the resulting HFGI matches the
@@ -13,9 +14,10 @@ target.
 This is an estimate, not a guarantee: it assumes the hypothetical day's
 High/Low collapse to its Close (no way to know intraday range in advance),
 which understates true ATR-driven volatility for a very large single-day
-move, and it holds Volume/VIX/Breadth at today's actual values even though
-a big move would likely shift those too (Breadth is inherently about the
-*rest* of the watchlist, so it can't be re-derived from the subject's own
+move, and it holds Volume/VIX/Breadth/Credit Appetite at today's actual
+values even though a big move would likely shift those too (Breadth and
+Credit Appetite are inherently about the rest of the watchlist / the
+credit market, so they can't be re-derived from the subject's own
 hypothetical price anyway).
 """
 
@@ -50,6 +52,7 @@ def _hfgi_as_function_of_price(ind: pd.DataFrame, scores: pd.DataFrame, extras: 
 
     roc_base = float(close.iloc[-1 - momentum_window])
     benchmark_roc_latest = float((ind["ROC"] - extras["relative_strength_raw"]).iloc[-1])
+    bond_roc_latest = float((ind["ROC"] - extras["safe_haven_raw"]).iloc[-1])
 
     delta = close.diff()
     gain_series = delta.clip(lower=0)
@@ -87,6 +90,11 @@ def _hfgi_as_function_of_price(ind: pd.DataFrame, scores: pd.DataFrame, extras: 
         # Breadth depends on the *rest* of the watchlist's prices, not the
         # subject's own hypothetical price, so it's held fixed here too.
         "Breadth_Score": float(scores["Breadth_Score"].iloc[-1]),
+        # Credit Appetite (HYG vs. IEF) has no dependency on the subject at
+        # all, so it's held fixed. Safe Haven Demand *does* depend on the
+        # subject's own ROC (vs. TLT's), so it's re-derived below like
+        # Relative Strength rather than held fixed.
+        "CreditAppetite_Score": float(scores["CreditAppetite_Score"].iloc[-1]),
     }
     if not is_primary:
         fixed_scores["ADRPremium_Score"] = float("nan")
@@ -112,6 +120,7 @@ def _hfgi_as_function_of_price(ind: pd.DataFrame, scores: pd.DataFrame, extras: 
         drawdown_hyp = price / running_max_hyp - 1.0
 
         relative_strength_hyp = roc_hyp - benchmark_roc_latest
+        safe_haven_hyp = roc_hyp - bond_roc_latest
 
         row = dict(fixed_scores)
         row["PriceMomentum_Score"] = _rank_with_hypothetical(roc_hyp, ind["ROC"], window)
@@ -122,6 +131,7 @@ def _hfgi_as_function_of_price(ind: pd.DataFrame, scores: pd.DataFrame, extras: 
         row["RelativeStrength_Score"] = _rank_with_hypothetical(
             relative_strength_hyp, extras["relative_strength_raw"], window
         )
+        row["SafeHaven_Score"] = _rank_with_hypothetical(safe_haven_hyp, extras["safe_haven_raw"], window)
         if is_primary:
             adr_premium_hyp = (price / primary_base - 1.0) - ref_cum_return_latest
             row["ADRPremium_Score"] = _rank_with_hypothetical(adr_premium_hyp, extras["adr_premium_raw"], window)

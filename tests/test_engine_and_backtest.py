@@ -32,6 +32,9 @@ def _fake_price_data(n=400):
         "SMH": _fake_ohlcv(n, seed=3, index=index),
         "SOXX": _fake_ohlcv(n, seed=4, index=index),
         config.MARKET_VOLATILITY_TICKER: _fake_ohlcv(n, seed=5, start_price=20.0, index=index),
+        config.SAFE_HAVEN_TICKER: _fake_ohlcv(n, seed=6, start_price=90.0, index=index),
+        config.CREDIT_RISK_TICKER: _fake_ohlcv(n, seed=7, start_price=80.0, index=index),
+        config.CREDIT_SAFE_TICKER: _fake_ohlcv(n, seed=8, start_price=95.0, index=index),
     }
 
 
@@ -44,8 +47,9 @@ def test_engine_output_has_expected_columns_and_bounded_hfgi():
         "HFGI", "State",
         "PriceMomentum_Score", "RSI_Score", "MACD_Score", "Volume_Score",
         "ATR_Score", "RelativeStrength_Score", "Drawdown_Score", "ADRPremium_Score",
-        "MarketVolatility_Score", "Breadth_Score", "Close", "ADR_Premium_Raw",
-        "RelativeStrength_Raw", "VIX_Close", "Breadth_Raw", "LookbackDays",
+        "MarketVolatility_Score", "Breadth_Score", "SafeHaven_Score", "CreditAppetite_Score",
+        "Close", "ADR_Premium_Raw", "RelativeStrength_Raw", "VIX_Close", "Breadth_Raw",
+        "SafeHaven_Raw", "CreditAppetite_Raw", "LookbackDays",
     }
     assert expected_cols.issubset(result.columns)
 
@@ -56,6 +60,8 @@ def test_engine_output_has_expected_columns_and_bounded_hfgi():
     assert result["RSI_Score"].dropna().between(0, 100).all()
     assert result["Breadth_Score"].dropna().between(0, 100).all()
     assert result["Breadth_Raw"].dropna().between(0, 100).all()
+    assert result["SafeHaven_Score"].dropna().between(0, 100).all()
+    assert result["CreditAppetite_Score"].dropna().between(0, 100).all()
 
 
 def test_engine_rsi_score_is_nan_until_enough_history_like_other_subscores():
@@ -123,6 +129,76 @@ def test_engine_breadth_reflects_pct_of_peers_above_their_own_sma():
 
     check_day = index[jump_day + 5]
     assert breadth.loc[check_day] == 50.0
+
+
+def test_engine_safe_haven_is_subject_roc_minus_bond_roc():
+    """Safe Haven Demand = subject's momentum minus TLT's. If the subject
+    is flat while TLT rallies, safe_haven_raw should be clearly negative
+    (bonds outperforming stocks -> flight-to-safety fear)."""
+    n = 60
+    index = pd.bdate_range("2021-01-04", periods=n)
+    flat = pd.Series(100.0, index=index)
+    rallying_bond = pd.Series(np.linspace(100.0, 130.0, n), index=index)
+
+    def make_ohlcv(close):
+        return pd.DataFrame(
+            {"Open": close, "High": close * 1.001, "Low": close * 0.999, "Close": close,
+             "Volume": pd.Series(1_000_000.0, index=index)},
+            index=index,
+        )
+
+    price_data = {
+        config.PRIMARY_TICKER: make_ohlcv(flat),
+        config.SAFE_HAVEN_TICKER: make_ohlcv(rallying_bond),
+    }
+    engine = HFGIEngine()
+    ind = engine.compute_indicators(price_data, subject=config.PRIMARY_TICKER)
+    safe_haven_raw = engine._safe_haven_raw(ind, price_data)
+    assert safe_haven_raw.dropna().iloc[-1] < -0.01
+
+
+def test_engine_credit_appetite_is_hyg_roc_minus_ief_roc():
+    """Junk Bond Demand proxy = HYG's momentum minus IEF's. HYG rallying
+    while IEF is flat should read as clearly positive (risk-on credit)."""
+    n = 60
+    index = pd.bdate_range("2021-01-04", periods=n)
+    rallying_junk = pd.Series(np.linspace(80.0, 100.0, n), index=index)
+    flat_safe = pd.Series(95.0, index=index)
+
+    def make_ohlcv(close):
+        return pd.DataFrame(
+            {"Open": close, "High": close * 1.001, "Low": close * 0.999, "Close": close,
+             "Volume": pd.Series(1_000_000.0, index=index)},
+            index=index,
+        )
+
+    price_data = {
+        config.PRIMARY_TICKER: _fake_ohlcv(n, seed=1, index=index),
+        config.CREDIT_RISK_TICKER: make_ohlcv(rallying_junk),
+        config.CREDIT_SAFE_TICKER: make_ohlcv(flat_safe),
+    }
+    engine = HFGIEngine()
+    ind = engine.compute_indicators(price_data, subject=config.PRIMARY_TICKER)
+    credit_appetite_raw = engine._credit_appetite_raw(ind, price_data)
+    assert credit_appetite_raw.dropna().iloc[-1] > 0.01
+
+
+def test_engine_safe_haven_and_credit_appetite_degrade_gracefully_when_missing():
+    """Without TLT/HYG/IEF in price_data, these factors should be NaN, not
+    crash, and the overall HFGI should still compute from the rest."""
+    price_data = _fake_price_data()
+    del price_data[config.SAFE_HAVEN_TICKER]
+    del price_data[config.CREDIT_RISK_TICKER]
+    del price_data[config.CREDIT_SAFE_TICKER]
+
+    engine = HFGIEngine()
+    result = engine.compute(price_data)
+
+    assert result["SafeHaven_Score"].isna().all()
+    assert result["CreditAppetite_Score"].isna().all()
+    hfgi = result["HFGI"].dropna()
+    assert len(hfgi) > 0
+    assert (hfgi >= 0).all() and (hfgi <= 100).all()
 
 
 def test_engine_relative_strength_excludes_subject_from_its_own_benchmark():

@@ -12,10 +12,19 @@ from pathlib import Path
 # itself from its own benchmark blend, see engine._relative_strength_raw).
 # ^VIX is a macro overlay: elevated market-wide volatility reads as fear
 # regardless of the subject's own price action (see market_volatility below).
+# TLT/HYG/IEF back two more CNN Fear & Greed Index-style macro overlays we
+# had no equivalent of (see safe_haven / credit_appetite in HFGI_WEIGHTS):
+#   TLT - iShares 20+ Year Treasury Bond ETF (safe-haven demand benchmark)
+#   HYG - iShares High Yield Corporate Bond ETF (junk bond demand proxy)
+#   IEF - iShares 7-10 Year Treasury Bond ETF (investment-grade proxy,
+#         paired against HYG for the credit-appetite spread)
 PRIMARY_TICKER = "SKHY"
 ADR_REFERENCE_TICKER = "000660.KS"
 SECTOR_BENCHMARK_TICKERS = ["SMH", "SOXX", "QQQ", "VOO"]
 MARKET_VOLATILITY_TICKER = "^VIX"
+SAFE_HAVEN_TICKER = "TLT"
+CREDIT_RISK_TICKER = "HYG"
+CREDIT_SAFE_TICKER = "IEF"
 
 # Additional subjects to run the HFGI engine on individually (each gets its
 # own HFGI/State/sub-score table and backtest, using the same sector
@@ -48,6 +57,7 @@ TICKERS = sorted(set(
     + [ADR_REFERENCE_TICKER]
     + SECTOR_BENCHMARK_TICKERS
     + [MARKET_VOLATILITY_TICKER]
+    + [SAFE_HAVEN_TICKER, CREDIT_RISK_TICKER, CREDIT_SAFE_TICKER]
 ))
 
 # --- Indicator parameters ------------------------------------------------
@@ -95,6 +105,16 @@ HFGI_WEIGHTS = {
     # yet — re-run that with this factor in the mix rather than trusting
     # this placeholder weight forever.
     "breadth": 15,
+    # Two more CNN Fear & Greed Index components we had no equivalent of.
+    # Both are macro overlays (same value for every subject, like VIX and
+    # breadth) and both placeholder weights pending calibrate_weights.py.
+    # Safe Haven Demand: subject's momentum vs. TLT's (long Treasuries) —
+    # stocks underperforming bonds reads as flight-to-safety fear.
+    "safe_haven": 12,
+    # Junk Bond Demand: HYG's momentum vs. IEF's (high-yield vs.
+    # investment-grade credit) — junk debt underperforming reads as credit
+    # risk aversion / fear, regardless of what any one stock is doing.
+    "credit_appetite": 12,
 }
 
 # Rolling lookback window (trading days) used to percentile-rank raw

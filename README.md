@@ -60,7 +60,8 @@ The original spec's weights (all in `config.HFGI_WEIGHTS`):
 ```
 HFGI = 20% Price Momentum + 15% RSI + 15% MACD + 15% Volume
      + 10% ATR + 10% Relative Strength + 10% Drawdown + 15% ADR Premium
-     + 15% Market Volatility (VIX) + 15% Breadth   [both added beyond the original spec]
+     + 15% Market Volatility (VIX) + 15% Breadth
+     + 12% Safe Haven Demand + 12% Credit Appetite   [all four added beyond the original spec]
 ```
 
 `config.HFGI_WEIGHTS` currently holds `calibrate_weights.py`'s calibrated
@@ -108,6 +109,22 @@ can't create a circular dependency. A subject that's itself in
 as Relative Strength. Not included in the `calibrate_weights.py` search
 yet — re-run that with this factor in the mix rather than trusting its
 placeholder weight (15) forever.
+
+**Safe Haven Demand & Credit Appetite overlays**: two more CNN Fear &
+Greed Index components we had no equivalent of.
+- **Safe Haven Demand**: `SafeHaven_Raw` is the subject's own momentum
+  minus `TLT`'s (20+ Year Treasury ETF) — stocks underperforming bonds
+  reads as flight-to-safety fear. Unlike Breadth/VIX, this one *does*
+  depend on the subject's own price, so `price_target.py` re-derives it
+  hypothetically (like Relative Strength) rather than holding it fixed.
+- **Credit Appetite**: `CreditAppetite_Raw` is `HYG` (high-yield/junk
+  corporate bonds) momentum minus `IEF` (7-10 Year Treasuries, an
+  investment-grade proxy) — a price-based stand-in for CNN's actual
+  Junk Bond Demand (yield-spread) methodology, since spread data isn't
+  available here. Same value for every subject (a macro overlay, held
+  fixed in `price_target.py` like VIX/Breadth).
+
+Both placeholder-weighted (12 each) pending `calibrate_weights.py`.
 
 **Note on ADR Premium**: no FX-rate ticker was available, so `ADR Premium`
 is approximated as the cumulative-return spread between SKHY and
