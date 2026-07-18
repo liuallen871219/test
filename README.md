@@ -79,11 +79,20 @@ pytest
 Indicator, engine, and backtest logic are covered with synthetic data (no
 network access required).
 
-## Known limitation
+## Known limitations
 
-Live `yfinance` downloads could not be exercised end-to-end in the sandbox
-this was developed in: `yfinance`'s HTTP client (`curl_cffi`) does
-browser-TLS-fingerprint impersonation, which the sandbox's inspecting
-egress proxy resets rather than tunnels. This is specific to that sandbox,
-not the code; `python run.py` should download normally on a machine with
-ordinary internet access.
+- `yfinance`'s HTTP client (`curl_cffi`) does browser-TLS-fingerprint
+  impersonation, which TLS-inspecting egress proxies (corporate networks,
+  some sandboxes) reset instead of tunneling. `hfgi_pro/data_loader.py`
+  sets `YF_DISABLE_CURL_CFFI=1` by default so `yfinance` falls back to its
+  officially supported plain-`requests` path, which works through such
+  proxies; set that env var to `0` before importing the package if you'd
+  rather keep curl_cffi's fingerprint impersonation.
+- `SKHY` (SK Hynix's Nasdaq listing) only started trading around
+  2026-07-10, so until it accumulates more history, RSI(14) and the
+  252-day rolling-percentile sub-scores stay `NaN` and the backtest has no
+  trades — `run.py` still completes (it no longer crashes on empty data),
+  it just has nothing to show yet for the primary ticker. `000660.KS`,
+  `SMH`, and `SOXX` all have full history today, so pointing
+  `config.PRIMARY_TICKER` at one of them (e.g. for a demo) already
+  produces a real HFGI curve and backtest.

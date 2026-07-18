@@ -46,6 +46,8 @@ def _build_positions(hfgi: pd.Series, buy_threshold: float, sell_threshold: floa
 
 
 def _build_trades(close: pd.Series, positions: pd.Series) -> pd.DataFrame:
+    if positions.empty:
+        return pd.DataFrame(columns=["entry_date", "exit_date", "entry_price", "exit_price", "return"])
     diff = positions.diff().fillna(positions.iloc[0])
     entries = list(positions.index[diff == 1])
     exits = list(positions.index[diff == -1])
@@ -80,6 +82,18 @@ def run_backtest(
     sell_threshold: float = config.BACKTEST_SELL_THRESHOLD,
 ) -> BacktestResult:
     df = hfgi_df.dropna(subset=["HFGI", "Close"]).copy()
+
+    if df.empty:
+        empty_series = pd.Series(dtype=float)
+        return BacktestResult(
+            equity_curve=empty_series,
+            positions=pd.Series(dtype=int),
+            trades=pd.DataFrame(columns=["entry_date", "exit_date", "entry_price", "exit_price", "return"]),
+            cagr=float("nan"),
+            sharpe_ratio=float("nan"),
+            max_drawdown=float("nan"),
+            win_rate=float("nan"),
+        )
 
     positions = _build_positions(df["HFGI"], buy_threshold, sell_threshold)
     daily_return = df["Close"].pct_change().fillna(0)

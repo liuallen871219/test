@@ -3,9 +3,16 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
 from pathlib import Path
 from typing import Dict, Iterable, Optional
+
+# yfinance defaults to curl_cffi for browser-TLS-fingerprint impersonation,
+# which TLS-inspecting proxies (corporate egress, this sandbox) reset instead
+# of tunneling. Prefer yfinance's own plain-requests fallback unless the
+# caller opts back into curl_cffi explicitly.
+os.environ.setdefault("YF_DISABLE_CURL_CFFI", "1")
 
 import pandas as pd
 import yfinance as yf
