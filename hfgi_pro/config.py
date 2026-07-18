@@ -19,7 +19,10 @@ MARKET_VOLATILITY_TICKER = "^VIX"
 #   DRAM  - Roundhill Memory ETF (pure-play DRAM/memory sector)
 #   QQQ   - Invesco QQQ Trust (broad Nasdaq-100 market benchmark)
 #   ALAB  - Astera Labs (AI-datacenter connectivity chipmaker)
-WATCHLIST = [PRIMARY_TICKER, "DRAM", "QQQ", "ALAB"]
+#   NVDA  - Nvidia (AI/GPU compute)
+#   TSM   - Taiwan Semiconductor (foundry)
+#   ASML  - ASML Holding (lithography equipment)
+WATCHLIST = [PRIMARY_TICKER, "DRAM", "QQQ", "ALAB", "NVDA", "TSM", "ASML"]
 
 TICKERS = sorted(set(
     WATCHLIST
@@ -38,22 +41,30 @@ MOMENTUM_WINDOW = 20  # days, used for price-momentum ROC and relative strength
 
 # --- HFGI Engine ----------------------------------------------------------
 # Sub-scores are normalized to 0-100 and combined with these weights (in %).
-# Note: the weights below (from spec) sum to 110, not 100; the engine
-# divides by the actual sum so the final HFGI still lands on a 0-100 scale.
+# The engine divides by whatever weight is actually available per row (see
+# engine.combine_scores), so these don't need to sum to exactly 100.
+#
+# These are calibrate_weights.py's "mean of top 20" result (500 random
+# trials, seed=0, evaluated on QQQ/ALAB/NVDA/TSM/ASML): median backtest
+# Sharpe 0.56 vs. 0.43 for the original hand-picked weights below. This is
+# an in-sample search over 5 correlated tech tickers over one overlapping
+# history window, not a validated out-of-sample result — re-run
+# calibrate_weights.py periodically rather than trusting these forever.
+# Original hand-picked weights (ChatGPT spec + the VIX overlay added on
+# top), kept here in case you want to revert:
+#   {"price_momentum": 20, "rsi": 15, "macd": 15, "volume": 15, "atr": 10,
+#    "relative_strength": 10, "drawdown": 10, "adr_premium": 15,
+#    "market_volatility": 15}
 HFGI_WEIGHTS = {
-    "price_momentum": 20,
-    "rsi": 15,
-    "macd": 15,
-    "volume": 15,
-    "atr": 10,
-    "relative_strength": 10,
-    "drawdown": 10,
-    "adr_premium": 15,
-    # Macro overlay (added beyond the original spec): market-wide VIX
-    # percentile, inverted (high VIX -> low score) same as ATR. Weighted
-    # comparably to the other secondary factors so idiosyncratic,
-    # asset-specific momentum still dominates the composite.
-    "market_volatility": 15,
+    "price_momentum": 9.9,
+    "rsi": 8.6,
+    "macd": 6.8,
+    "volume": 8.2,
+    "atr": 13.7,
+    "relative_strength": 7.8,
+    "drawdown": 7.6,
+    "adr_premium": 13.1,
+    "market_volatility": 24.3,
 }
 
 # Rolling lookback window (trading days) used to percentile-rank raw
@@ -71,6 +82,10 @@ STATE_THRESHOLDS = {
 # --- Backtest --------------------------------------------------------------
 BACKTEST_BUY_THRESHOLD = 30
 BACKTEST_SELL_THRESHOLD = 70
+# Round-trip cost (commission + slippage) charged on every entry and exit,
+# in basis points of the trade price. A prior version ran 39 trades over
+# QQQ's history at zero cost, which meaningfully overstated CAGR/Sharpe.
+BACKTEST_TRANSACTION_COST_BPS = 10
 
 # --- Paths ------------------------------------------------------------------
 DATA_DIR = Path("data")

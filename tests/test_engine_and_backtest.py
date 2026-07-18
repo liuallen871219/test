@@ -45,7 +45,7 @@ def test_engine_output_has_expected_columns_and_bounded_hfgi():
         "PriceMomentum_Score", "RSI_Score", "MACD_Score", "Volume_Score",
         "ATR_Score", "RelativeStrength_Score", "Drawdown_Score", "ADRPremium_Score",
         "MarketVolatility_Score", "Close", "ADR_Premium_Raw", "RelativeStrength_Raw",
-        "VIX_Close",
+        "VIX_Close", "LookbackDays",
     }
     assert expected_cols.issubset(result.columns)
 
@@ -53,6 +53,26 @@ def test_engine_output_has_expected_columns_and_bounded_hfgi():
     assert (hfgi >= 0).all() and (hfgi <= 100).all()
     assert result["State"].dropna().isin(list(config.STATE_THRESHOLDS.keys()) + ["Unknown"]).all()
     assert result["MarketVolatility_Score"].dropna().between(0, 100).all()
+    assert result["RSI_Score"].dropna().between(0, 100).all()
+
+
+def test_engine_rsi_score_is_nan_until_enough_history_like_other_subscores():
+    """RSI_Score should be percentile-ranked like the rest, so it needs the
+    same minimum history before producing a value, not RSI's raw 0-100
+    reading available from day one."""
+    price_data = _fake_price_data(n=400)
+    engine = HFGIEngine()
+    result = engine.compute(price_data)
+    assert result["RSI_Score"].iloc[:19].isna().all()
+
+
+def test_engine_lookback_days_grows_with_history_and_caps_at_window():
+    price_data = _fake_price_data(n=400)
+    engine = HFGIEngine(rolling_window=100)
+    result = engine.compute(price_data)
+    lookback = result["LookbackDays"].dropna()
+    assert lookback.iloc[0] <= lookback.iloc[-1]
+    assert lookback.max() <= 100
 
 
 def test_engine_hfgi_survives_missing_reference_ticker():
@@ -96,3 +116,19 @@ def test_backtest_runs_and_produces_bounded_metrics():
     assert -1.0 <= summary["max_drawdown"] <= 0.0
     if summary["num_trades"] > 0:
         assert 0.0 <= summary["win_rate"] <= 1.0
+
+
+def test_backtest_transaction_costs_reduce_returns():
+    price_data = _fake_price_data()
+    engine = HFGIEngine()
+    hfgi_df = engine.compute(price_data)
+
+    free = run_backtest(hfgi_df, transaction_cost_bps=0)
+    costly = run_backtest(hfgi_df, transaction_cost_bps=50)
+
+    if len(free.trades) > 0:
+        assert costly.equity_curve.iloc[-1] < free.equity_curve.iloc[-1]
+        assert np.allclose(
+            costly.trades["return"].values,
+            free.trades["return"].values - 2 * (50 / 10_000.0),
+        )

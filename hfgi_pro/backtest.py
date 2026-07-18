@@ -45,12 +45,13 @@ def _build_positions(hfgi: pd.Series, buy_threshold: float, sell_threshold: floa
     return pd.Series(positions, index=hfgi.index, name="Position")
 
 
-def _build_trades(close: pd.Series, positions: pd.Series) -> pd.DataFrame:
+def _build_trades(close: pd.Series, positions: pd.Series, transaction_cost_bps: float) -> pd.DataFrame:
     if positions.empty:
         return pd.DataFrame(columns=["entry_date", "exit_date", "entry_price", "exit_price", "return"])
     diff = positions.diff().fillna(positions.iloc[0])
     entries = list(positions.index[diff == 1])
     exits = list(positions.index[diff == -1])
+    round_trip_cost = 2 * (transaction_cost_bps / 10_000.0)  # one entry + one exit
 
     trades = []
     exit_idx = 0
@@ -70,7 +71,7 @@ def _build_trades(close: pd.Series, positions: pd.Series) -> pd.DataFrame:
                 "exit_date": exit_date,
                 "entry_price": entry_price,
                 "exit_price": exit_price,
-                "return": exit_price / entry_price - 1.0,
+                "return": exit_price / entry_price - 1.0 - round_trip_cost,
             }
         )
     return pd.DataFrame(trades)
@@ -80,6 +81,7 @@ def run_backtest(
     hfgi_df: pd.DataFrame,
     buy_threshold: float = config.BACKTEST_BUY_THRESHOLD,
     sell_threshold: float = config.BACKTEST_SELL_THRESHOLD,
+    transaction_cost_bps: float = config.BACKTEST_TRANSACTION_COST_BPS,
 ) -> BacktestResult:
     df = hfgi_df.dropna(subset=["HFGI", "Close"]).copy()
 
@@ -98,9 +100,16 @@ def run_backtest(
     positions = _build_positions(df["HFGI"], buy_threshold, sell_threshold)
     daily_return = df["Close"].pct_change().fillna(0)
     strategy_return = positions.shift(1).fillna(0) * daily_return
+
+    # Charge a round-trip cost (commission + slippage) on every entry and
+    # exit day, not just a frictionless mark-to-market of the price move.
+    position_change = positions.diff().abs()
+    position_change.iloc[0] = positions.iloc[0]
+    strategy_return = strategy_return - position_change * (transaction_cost_bps / 10_000.0)
+
     equity_curve = (1 + strategy_return).cumprod()
 
-    trades = _build_trades(df["Close"], positions)
+    trades = _build_trades(df["Close"], positions, transaction_cost_bps)
 
     n_years = (df.index[-1] - df.index[0]).days / 365.25
     cagr = equity_curve.iloc[-1] ** (1 / n_years) - 1 if n_years > 0 else float("nan")

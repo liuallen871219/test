@@ -11,14 +11,27 @@ import pandas as pd
 from . import config, indicators
 
 
+def _min_periods(window: int) -> int:
+    return max(20, window // 5)
+
+
 def _percentile_score(series: pd.Series, window: int) -> pd.Series:
     """Rolling percentile rank of the latest value within its own trailing
     window, scaled to 0-100. This turns an arbitrary-scale raw indicator
     into a comparable "how greedy is this relative to its recent history"
     sub-score.
     """
-    min_periods = max(20, window // 5)
-    return series.rolling(window, min_periods=min_periods).rank(pct=True) * 100
+    return series.rolling(window, min_periods=_min_periods(window)).rank(pct=True) * 100
+
+
+def _lookback_count(series: pd.Series, window: int) -> pd.Series:
+    """How many observations each row's percentile rank actually used (capped
+    at `window`). A newly-listed ticker's early scores are computed against a
+    handful of days rather than a full year, so percentile ranks are noisier
+    and less statistically stable than they look; this makes that visible
+    instead of hiding it.
+    """
+    return series.rolling(window, min_periods=_min_periods(window)).count()
 
 
 def _classify_state(score: float) -> str:
@@ -28,6 +41,33 @@ def _classify_state(score: float) -> str:
         if low <= score < high:
             return state
     return "Unknown"
+
+
+# Maps each sub-score column to its key in config.HFGI_WEIGHTS / HFGIEngine.weights.
+SCORE_WEIGHT_KEYS = {
+    "PriceMomentum_Score": "price_momentum",
+    "RSI_Score": "rsi",
+    "MACD_Score": "macd",
+    "Volume_Score": "volume",
+    "ATR_Score": "atr",
+    "RelativeStrength_Score": "relative_strength",
+    "Drawdown_Score": "drawdown",
+    "ADRPremium_Score": "adr_premium",
+    "MarketVolatility_Score": "market_volatility",
+}
+
+
+def combine_scores(scores: pd.DataFrame, weights: Dict[str, float]) -> pd.Series:
+    """Weighted average of `scores` columns using `weights` (keyed by
+    config.HFGI_WEIGHTS names, see SCORE_WEIGHT_KEYS), ignoring whichever
+    sub-scores are NaN for a given row instead of letting a single missing
+    column (e.g. no ADR reference ticker) blank out the whole composite.
+    """
+    weight_series = pd.Series({col: weights[key] for col, key in SCORE_WEIGHT_KEYS.items() if key in weights})
+    scores = scores[weight_series.index]
+    weighted_sum = scores.fillna(0).mul(weight_series, axis=1).sum(axis=1)
+    available_weight = scores.notna().mul(weight_series, axis=1).sum(axis=1)
+    return weighted_sum / available_weight.replace(0, np.nan)
 
 
 @dataclass
@@ -103,9 +143,14 @@ class HFGIEngine:
             return pd.Series(index=ind.index, dtype=float)
         return price_data[vix_ticker]["Close"].reindex(ind.index).ffill()
 
-    def compute(self, price_data: Dict[str, pd.DataFrame], subject: str = None) -> pd.DataFrame:
-        """Compute the full HFGI table for `subject`: Date (index), HFGI,
-        State, and each weighted sub-score. Defaults to config.PRIMARY_TICKER.
+    def compute_subscores(self, price_data: Dict[str, pd.DataFrame], subject: str = None):
+        """Compute `subject`'s raw indicators and 0-100 sub-scores, independent
+        of any particular weighting. Returns (ind, scores, extras); `extras`
+        carries the raw (non-percentile-ranked) series needed for reporting
+        (ADR premium, relative strength, VIX close). Split out from `compute`
+        so a weight search can reuse the (expensive) rolling-percentile work
+        across many candidate weight vectors instead of recomputing it per
+        candidate.
         """
         subject = subject or config.PRIMARY_TICKER
         ind = self.compute_indicators(price_data, subject)
@@ -116,7 +161,12 @@ class HFGIEngine:
 
         scores = pd.DataFrame(index=ind.index)
         scores["PriceMomentum_Score"] = _percentile_score(ind["ROC"], self.rolling_window)
-        scores["RSI_Score"] = ind["RSI"]
+        # Percentile-ranked like every other sub-score, rather than RSI's raw
+        # 0-100 reading used directly: a stock that structurally trades in
+        # the 60-70 RSI range isn't "always greedy", it's just there normally,
+        # so ranking against its own history keeps this factor's weight
+        # comparable to the others instead of mixing an absolute scale in.
+        scores["RSI_Score"] = _percentile_score(ind["RSI"], self.rolling_window)
         scores["MACD_Score"] = _percentile_score(ind["MACD_Hist"], self.rolling_window)
         scores["Volume_Score"] = _percentile_score(ind["VolumeRatio"], self.rolling_window)
         # High ATR (volatility) reads as fear, so invert the percentile rank.
@@ -127,31 +177,33 @@ class HFGIEngine:
         # High VIX (market-wide fear) reads as fear, so invert the rank too.
         scores["MarketVolatility_Score"] = 100 - _percentile_score(vix_close, self.rolling_window)
 
-        weight_map = {
-            "PriceMomentum_Score": self.weights["price_momentum"],
-            "RSI_Score": self.weights["rsi"],
-            "MACD_Score": self.weights["macd"],
-            "Volume_Score": self.weights["volume"],
-            "ATR_Score": self.weights["atr"],
-            "RelativeStrength_Score": self.weights["relative_strength"],
-            "Drawdown_Score": self.weights["drawdown"],
-            "ADRPremium_Score": self.weights["adr_premium"],
-            "MarketVolatility_Score": self.weights["market_volatility"],
+        extras = {
+            "adr_premium_raw": adr_premium_raw,
+            "relative_strength_raw": relative_strength_raw,
+            "vix_close": vix_close,
+            "lookback_days": _lookback_count(ind["ROC"], self.rolling_window),
         }
-        # Weighted average that ignores any sub-score missing for a given row
-        # (e.g. no ADR reference ticker was supplied), rather than letting a
-        # single NaN column blank out the whole composite.
-        weights = pd.Series(weight_map)
-        weighted_sum = scores.fillna(0).mul(weights, axis=1).sum(axis=1)
-        available_weight = scores.notna().mul(weights, axis=1).sum(axis=1)
-        hfgi = (weighted_sum / available_weight.replace(0, np.nan))
+        return ind, scores, extras
+
+    def compute(self, price_data: Dict[str, pd.DataFrame], subject: str = None, weights: Dict[str, float] = None) -> pd.DataFrame:
+        """Compute the full HFGI table for `subject`: Date (index), HFGI,
+        State, and each weighted sub-score. Defaults to config.PRIMARY_TICKER
+        and self.weights.
+        """
+        ind, scores, extras = self.compute_subscores(price_data, subject)
+        hfgi = combine_scores(scores, weights or self.weights)
 
         result = pd.DataFrame(index=ind.index)
         result["HFGI"] = hfgi
         result["State"] = result["HFGI"].apply(_classify_state)
         result = result.join(scores)
         result["Close"] = ind["Close"]
-        result["ADR_Premium_Raw"] = adr_premium_raw
-        result["RelativeStrength_Raw"] = relative_strength_raw
-        result["VIX_Close"] = vix_close
+        result["ADR_Premium_Raw"] = extras["adr_premium_raw"]
+        result["RelativeStrength_Raw"] = extras["relative_strength_raw"]
+        result["VIX_Close"] = extras["vix_close"]
+        # How many days of history back each row's percentile-ranked
+        # sub-scores were actually computed over (capped at rolling_window).
+        # Low values (e.g. a ticker with only a few months of trading) mean
+        # the sub-scores above are a much noisier signal than usual.
+        result["LookbackDays"] = extras["lookback_days"]
         return result
