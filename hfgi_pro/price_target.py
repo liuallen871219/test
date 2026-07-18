@@ -13,8 +13,10 @@ target.
 This is an estimate, not a guarantee: it assumes the hypothetical day's
 High/Low collapse to its Close (no way to know intraday range in advance),
 which understates true ATR-driven volatility for a very large single-day
-move, and it holds Volume/Relative Strength/VIX at today's actual values
-even though a big move would likely shift those too.
+move, and it holds Volume/VIX/Breadth at today's actual values even though
+a big move would likely shift those too (Breadth is inherently about the
+*rest* of the watchlist, so it can't be re-derived from the subject's own
+hypothetical price anyway).
 """
 
 from __future__ import annotations
@@ -82,6 +84,9 @@ def _hfgi_as_function_of_price(ind: pd.DataFrame, scores: pd.DataFrame, extras: 
     fixed_scores = {
         "Volume_Score": float(scores["Volume_Score"].iloc[-1]),
         "MarketVolatility_Score": float(scores["MarketVolatility_Score"].iloc[-1]),
+        # Breadth depends on the *rest* of the watchlist's prices, not the
+        # subject's own hypothetical price, so it's held fixed here too.
+        "Breadth_Score": float(scores["Breadth_Score"].iloc[-1]),
     }
     if not is_primary:
         fixed_scores["ADRPremium_Score"] = float("nan")

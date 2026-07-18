@@ -57,6 +57,7 @@ ATR_WINDOW = 14
 SMA_WINDOWS = (20, 50, 125)
 VOLUME_SMA_WINDOW = 20
 MOMENTUM_WINDOW = 20  # days, used for price-momentum ROC and relative strength
+BREADTH_SMA_WINDOW = 50  # for the breadth factor below
 
 # --- HFGI Engine ----------------------------------------------------------
 # Sub-scores are normalized to 0-100 and combined with these weights (in %).
@@ -84,6 +85,16 @@ HFGI_WEIGHTS = {
     "drawdown": 7.6,
     "adr_premium": 13.1,
     "market_volatility": 24.3,
+    # Cross-sectional market-breadth overlay (added beyond calibration,
+    # inspired by CNN Fear & Greed Index's "Stock Price Strength/Breadth"
+    # component, which we had no equivalent of): what fraction of the rest
+    # of the watchlist is trading above its own BREADTH_SMA_WINDOW-day SMA.
+    # Weighted comparably to market_volatility since both are macro/
+    # cross-sectional overlays applied identically to every subject, not
+    # idiosyncratic to it. Not included in the calibrate_weights.py search
+    # yet — re-run that with this factor in the mix rather than trusting
+    # this placeholder weight forever.
+    "breadth": 15,
 }
 
 # Rolling lookback window (trading days) used to percentile-rank raw

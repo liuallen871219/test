@@ -44,8 +44,8 @@ def test_engine_output_has_expected_columns_and_bounded_hfgi():
         "HFGI", "State",
         "PriceMomentum_Score", "RSI_Score", "MACD_Score", "Volume_Score",
         "ATR_Score", "RelativeStrength_Score", "Drawdown_Score", "ADRPremium_Score",
-        "MarketVolatility_Score", "Close", "ADR_Premium_Raw", "RelativeStrength_Raw",
-        "VIX_Close", "LookbackDays",
+        "MarketVolatility_Score", "Breadth_Score", "Close", "ADR_Premium_Raw",
+        "RelativeStrength_Raw", "VIX_Close", "Breadth_Raw", "LookbackDays",
     }
     assert expected_cols.issubset(result.columns)
 
@@ -54,6 +54,8 @@ def test_engine_output_has_expected_columns_and_bounded_hfgi():
     assert result["State"].dropna().isin(list(config.STATE_THRESHOLDS.keys()) + ["Unknown"]).all()
     assert result["MarketVolatility_Score"].dropna().between(0, 100).all()
     assert result["RSI_Score"].dropna().between(0, 100).all()
+    assert result["Breadth_Score"].dropna().between(0, 100).all()
+    assert result["Breadth_Raw"].dropna().between(0, 100).all()
 
 
 def test_engine_rsi_score_is_nan_until_enough_history_like_other_subscores():
@@ -88,6 +90,39 @@ def test_engine_hfgi_survives_missing_reference_ticker():
     hfgi = result["HFGI"].dropna()
     assert len(hfgi) > 0
     assert (hfgi >= 0).all() and (hfgi <= 100).all()
+
+
+def test_engine_breadth_reflects_pct_of_peers_above_their_own_sma():
+    """Breadth = % of the rest of WATCHLIST above its own BREADTH_SMA_WINDOW
+    SMA. With SMH flat-then-up and SOXX flat-then-down, shortly after the
+    jump SMH should read above its SMA and SOXX below, giving breadth 50%
+    for a subject (SKHY) that isn't itself one of the two peers."""
+    n = 70
+    index = pd.bdate_range("2021-01-04", periods=n)
+    jump_day = 60
+
+    def step_series(start, end):
+        return pd.Series([start] * jump_day + [end] * (n - jump_day), index=index)
+
+    def make_ohlcv(close):
+        return pd.DataFrame(
+            {"Open": close, "High": close * 1.001, "Low": close * 0.999, "Close": close,
+             "Volume": pd.Series(1_000_000.0, index=index)},
+            index=index,
+        )
+
+    price_data = {
+        config.PRIMARY_TICKER: _fake_ohlcv(n, seed=1, index=index),
+        "SMH": make_ohlcv(step_series(100.0, 200.0)),
+        "SOXX": make_ohlcv(step_series(200.0, 100.0)),
+    }
+
+    engine = HFGIEngine()
+    ind = engine.compute_indicators(price_data, subject=config.PRIMARY_TICKER)
+    breadth = engine._breadth_raw(ind, price_data, subject=config.PRIMARY_TICKER)
+
+    check_day = index[jump_day + 5]
+    assert breadth.loc[check_day] == 50.0
 
 
 def test_engine_relative_strength_excludes_subject_from_its_own_benchmark():

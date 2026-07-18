@@ -60,7 +60,7 @@ The original spec's weights (all in `config.HFGI_WEIGHTS`):
 ```
 HFGI = 20% Price Momentum + 15% RSI + 15% MACD + 15% Volume
      + 10% ATR + 10% Relative Strength + 10% Drawdown + 15% ADR Premium
-     + 15% Market Volatility (VIX)   [added beyond the original spec]
+     + 15% Market Volatility (VIX) + 15% Breadth   [both added beyond the original spec]
 ```
 
 `config.HFGI_WEIGHTS` currently holds `calibrate_weights.py`'s calibrated
@@ -92,6 +92,22 @@ weakness. `MarketVolatility_Score` is `^VIX`'s rolling percentile rank,
 inverted (elevated VIX -> low score), applied identically to every
 watchlist subject. If `^VIX` data isn't available it's simply omitted,
 same graceful degradation as ADR Premium below.
+
+**Breadth overlay**: inspired by the CNN Fear & Greed Index's "Stock Price
+Strength/Breadth" component (advancing/declining stocks, new highs vs.
+lows), which we had no equivalent of — every other factor looks at a
+single ticker (plus, at most, a couple of benchmarks), never "how many of
+its peers are also in trouble." `Breadth_Raw` is the % of the rest of
+`config.WATCHLIST` trading above its own `BREADTH_SMA_WINDOW`-day (50)
+SMA on that date; `Breadth_Score` percentile-ranks that against its own
+history (not inverted — higher breadth already means more greed). It's
+computed from each peer's raw price vs. its own SMA, never another
+peer's *composite* HFGI, specifically so 15 tickers scoring each other
+can't create a circular dependency. A subject that's itself in
+`WATCHLIST` excludes itself from its own breadth reading, same rationale
+as Relative Strength. Not included in the `calibrate_weights.py` search
+yet — re-run that with this factor in the mix rather than trusting its
+placeholder weight (15) forever.
 
 **Note on ADR Premium**: no FX-rate ticker was available, so `ADR Premium`
 is approximated as the cumulative-return spread between SKHY and
@@ -209,15 +225,17 @@ averaged with the already-known prior `HFGI_SMOOTHING_WINDOW - 1` days,
 lands the smoothed value on the target.
 
 This is an estimate, not a guarantee — it assumes the hypothetical day's
-High/Low collapse to its Close, and holds Volume/VIX fixed even though a
-real move that size would likely shift those too.
+High/Low collapse to its Close, and holds Volume/VIX/Breadth fixed even
+though a real move that size would likely shift those too (Breadth is
+inherently about the rest of the watchlist, so it couldn't be re-derived
+from the subject's own hypothetical price anyway).
 
 `estimate_price_targets(...)` always returns a number per threshold —
 never NaN/None — with one exception: a ticker with too little history to
 evaluate the model at all (e.g. `SKHY`'s ~6 rows). A large single-day
 move raises ATR (and thus reads as more "fear," pulling the score back
-down) regardless of direction, and holding Volume/VIX fixed adds its own
-floor/ceiling on top of that, so a tier's exact HFGI target can sit
+down) regardless of direction, and holding Volume/VIX/Breadth fixed adds
+its own floor/ceiling on top of that, so a tier's exact HFGI target can sit
 outside what's reachable within the (already wide, 0.05x-3x) search
 range; rather than giving up with `None`, `_bisect` returns the closest
 boundary price in that range, and `run.py` labels it "外插估計,已達搜尋

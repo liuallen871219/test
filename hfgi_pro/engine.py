@@ -54,6 +54,7 @@ SCORE_WEIGHT_KEYS = {
     "Drawdown_Score": "drawdown",
     "ADRPremium_Score": "adr_premium",
     "MarketVolatility_Score": "market_volatility",
+    "Breadth_Score": "breadth",
 }
 
 
@@ -150,6 +151,29 @@ class HFGIEngine:
             return pd.Series(index=ind.index, dtype=float)
         return price_data[vix_ticker]["Close"].reindex(ind.index).ffill()
 
+    def _breadth_raw(self, ind: pd.DataFrame, price_data: Dict[str, pd.DataFrame], subject: str) -> pd.Series:
+        """Cross-sectional market breadth: % of the rest of config.WATCHLIST
+        trading above its own BREADTH_SMA_WINDOW-day SMA, on each date
+        (inspired by CNN Fear & Greed Index's "Stock Price Strength/Breadth"
+        component). Deliberately computed from each peer's raw price vs. its
+        own SMA — not each peer's own composite HFGI — so this can't create
+        a circular dependency between subjects. Excludes `subject` itself,
+        same rationale as _relative_strength_raw.
+        """
+        window = config.BREADTH_SMA_WINDOW
+        above_flags = []
+        for ticker in config.WATCHLIST:
+            if ticker == subject or ticker not in price_data:
+                continue
+            close = price_data[ticker]["Close"]
+            sma = close.rolling(window, min_periods=window).mean()
+            above = (close > sma).astype(float)
+            above[sma.isna()] = np.nan
+            above_flags.append(above.reindex(ind.index).ffill())
+        if not above_flags:
+            return pd.Series(index=ind.index, dtype=float)
+        return pd.concat(above_flags, axis=1).mean(axis=1, skipna=True) * 100
+
     def compute_subscores(self, price_data: Dict[str, pd.DataFrame], subject: str = None):
         """Compute `subject`'s raw indicators and 0-100 sub-scores, independent
         of any particular weighting. Returns (ind, scores, extras); `extras`
@@ -165,6 +189,7 @@ class HFGIEngine:
         relative_strength_raw = self._relative_strength_raw(ind, price_data, subject)
         adr_premium_raw = self._adr_premium_raw(ind, price_data, subject)
         vix_close = self._vix_close(ind, price_data)
+        breadth_raw = self._breadth_raw(ind, price_data, subject)
 
         scores = pd.DataFrame(index=ind.index)
         scores["PriceMomentum_Score"] = _percentile_score(ind["ROC"], self.rolling_window)
@@ -183,11 +208,15 @@ class HFGIEngine:
         scores["ADRPremium_Score"] = _percentile_score(adr_premium_raw, self.rolling_window)
         # High VIX (market-wide fear) reads as fear, so invert the rank too.
         scores["MarketVolatility_Score"] = 100 - _percentile_score(vix_close, self.rolling_window)
+        # Higher breadth (more peers above their own SMA) already reads as
+        # greed in the same direction, so no inversion needed here.
+        scores["Breadth_Score"] = _percentile_score(breadth_raw, self.rolling_window)
 
         extras = {
             "adr_premium_raw": adr_premium_raw,
             "relative_strength_raw": relative_strength_raw,
             "vix_close": vix_close,
+            "breadth_raw": breadth_raw,
             "lookback_days": _lookback_count(ind["ROC"], self.rolling_window),
         }
         return ind, scores, extras
@@ -212,6 +241,7 @@ class HFGIEngine:
         result["ADR_Premium_Raw"] = extras["adr_premium_raw"]
         result["RelativeStrength_Raw"] = extras["relative_strength_raw"]
         result["VIX_Close"] = extras["vix_close"]
+        result["Breadth_Raw"] = extras["breadth_raw"]
         # How many days of history back each row's percentile-ranked
         # sub-scores were actually computed over (capped at rolling_window).
         # Low values (e.g. a ticker with only a few months of trading) mean
