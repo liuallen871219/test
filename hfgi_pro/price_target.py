@@ -95,6 +95,9 @@ def _hfgi_as_function_of_price(ind: pd.DataFrame, scores: pd.DataFrame, extras: 
         # subject's own ROC (vs. TLT's), so it's re-derived below like
         # Relative Strength rather than held fixed.
         "CreditAppetite_Score": float(scores["CreditAppetite_Score"].iloc[-1]),
+        # Put/Call has no historical series at all (see hfgi_pro/put_call.py),
+        # so there's nothing meaningful to fix it at or re-derive; always NaN.
+        "PutCall_Score": float("nan"),
     }
     if not is_primary:
         fixed_scores["ADRPremium_Score"] = float("nan")

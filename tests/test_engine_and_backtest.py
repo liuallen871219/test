@@ -48,8 +48,8 @@ def test_engine_output_has_expected_columns_and_bounded_hfgi():
         "PriceMomentum_Score", "RSI_Score", "MACD_Score", "Volume_Score",
         "ATR_Score", "RelativeStrength_Score", "Drawdown_Score", "ADRPremium_Score",
         "MarketVolatility_Score", "Breadth_Score", "SafeHaven_Score", "CreditAppetite_Score",
-        "Close", "ADR_Premium_Raw", "RelativeStrength_Raw", "VIX_Close", "Breadth_Raw",
-        "SafeHaven_Raw", "CreditAppetite_Raw", "LookbackDays",
+        "PutCall_Score", "Close", "ADR_Premium_Raw", "RelativeStrength_Raw", "VIX_Close",
+        "Breadth_Raw", "SafeHaven_Raw", "CreditAppetite_Raw", "LookbackDays",
     }
     assert expected_cols.issubset(result.columns)
 
@@ -59,6 +59,9 @@ def test_engine_output_has_expected_columns_and_bounded_hfgi():
     assert result["MarketVolatility_Score"].dropna().between(0, 100).all()
     assert result["RSI_Score"].dropna().between(0, 100).all()
     assert result["Breadth_Score"].dropna().between(0, 100).all()
+    # No historical time series exists for Put/Call (see hfgi_pro/put_call.py);
+    # it should be NaN throughout rather than crash combine_scores.
+    assert result["PutCall_Score"].isna().all()
     assert result["Breadth_Raw"].dropna().between(0, 100).all()
     assert result["SafeHaven_Score"].dropna().between(0, 100).all()
     assert result["CreditAppetite_Score"].dropna().between(0, 100).all()

@@ -57,6 +57,7 @@ SCORE_WEIGHT_KEYS = {
     "Breadth_Score": "breadth",
     "SafeHaven_Score": "safe_haven",
     "CreditAppetite_Score": "credit_appetite",
+    "PutCall_Score": "put_call",
 }
 
 
@@ -244,6 +245,10 @@ class HFGIEngine:
         # both already read as greed in the same direction — no inversion.
         scores["SafeHaven_Score"] = _percentile_score(safe_haven_raw, self.rolling_window)
         scores["CreditAppetite_Score"] = _percentile_score(credit_appetite_raw, self.rolling_window)
+        # Always NaN here — Put/Call has no historical time series (see
+        # hfgi_pro/put_call.py), only ever a live value for *today*, which
+        # callers inject into a single-row copy of this table themselves.
+        scores["PutCall_Score"] = np.nan
 
         extras = {
             "adr_premium_raw": adr_premium_raw,

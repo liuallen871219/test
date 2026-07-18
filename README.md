@@ -61,7 +61,9 @@ The original spec's weights (all in `config.HFGI_WEIGHTS`):
 HFGI = 20% Price Momentum + 15% RSI + 15% MACD + 15% Volume
      + 10% ATR + 10% Relative Strength + 10% Drawdown + 15% ADR Premium
      + 15% Market Volatility (VIX) + 15% Breadth
-     + 12% Safe Haven Demand + 12% Credit Appetite   [all four added beyond the original spec]
+     + 12% Safe Haven Demand + 12% Credit Appetite + 10% Put/Call
+     [all five added beyond the original spec; Put/Call only ever affects
+     today's live reading, never the historical series/backtest]
 ```
 
 `config.HFGI_WEIGHTS` currently holds `calibrate_weights.py`'s calibrated
@@ -125,6 +127,28 @@ Greed Index components we had no equivalent of.
   fixed in `price_target.py` like VIX/Breadth).
 
 Both placeholder-weighted (12 each) pending `calibrate_weights.py`.
+
+**Put/Call ratio (`hfgi_pro/put_call.py`)**: CNN's last remaining
+component we had no equivalent of. Unlike every other factor, this one
+can't be a rolling time series at all — `yfinance`'s `option_chain()`
+only exposes *today's* live option chain (Yahoo Finance has no
+historical options data), so there's no 252-day history to percentile-
+rank and no way to backtest it, ever. `PutCall_Score` is therefore always
+NaN in `HFGIEngine.compute(...)`'s output (the NaN-tolerant weighted
+average just excludes it, same mechanism as a missing ADR reference) —
+the engine and backtest stay fully deterministic and offline-testable.
+`fetch_put_call_score()` does a live fetch (volume-weighted across the
+nearest `PUT_CALL_NUM_EXPIRATIONS` expirations of `PUT_CALL_TICKER`,
+`QQQ` — a liquid, broad-market proxy, since CNN's own version of this
+factor is SPX-options-based rather than per-stock) and maps the ratio to
+a 0-100 score via fixed reference bands (`PUT_CALL_GREED_RATIO`/
+`PUT_CALL_FEAR_RATIO`), not a percentile rank, since there's no history
+to rank against — treat those bands as a rough heuristic, not something
+calibrated to this project's own data like every other threshold here.
+`run.py` fetches it once per run and prints a "live-adjusted" HFGI next
+to each subject's raw reading — informational only, it never changes
+`data/hfgi_<TICKER>.parquet` or the backtest. Pass `--skip-put-call` for
+a fully offline, deterministic run.
 
 **Note on ADR Premium**: no FX-rate ticker was available, so `ADR Premium`
 is approximated as the cumulative-return spread between SKHY and

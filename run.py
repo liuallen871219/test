@@ -24,11 +24,14 @@ import json
 import logging
 from pathlib import Path
 
+import pandas as pd
+
 from hfgi_pro import config
 from hfgi_pro.backtest import run_backtest
 from hfgi_pro.data_loader import DataLoader
-from hfgi_pro.engine import HFGIEngine
+from hfgi_pro.engine import HFGIEngine, combine_scores
 from hfgi_pro.price_target import estimate_price_targets
+from hfgi_pro.put_call import fetch_put_call_score
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -40,6 +43,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--end", default=None, help="End date, e.g. 2026-07-18")
     parser.add_argument("--refresh", action="store_true", help="Force re-download, ignoring cache")
     parser.add_argument("--data-dir", default=str(config.DATA_DIR))
+    parser.add_argument(
+        "--skip-put-call",
+        action="store_true",
+        help=(
+            "Skip the live Put/Call ratio fetch (config.PUT_CALL_TICKER options "
+            "chain). It's a live network call with no historical equivalent "
+            "(see hfgi_pro/put_call.py), so it only ever adjusts *today's* "
+            "reading, never the backtest; skip it if you don't need that or "
+            "want a fully offline/deterministic run."
+        ),
+    )
     parser.add_argument(
         "--exclude-price-target-factors",
         default="",
@@ -72,6 +86,17 @@ def main() -> None:
     engine = HFGIEngine()
     all_summaries = {}
 
+    put_call_info = None
+    if not args.skip_put_call:
+        put_call_info = fetch_put_call_score()
+        if put_call_info is not None:
+            print(
+                f"\nPut/Call ratio ({config.PUT_CALL_TICKER}, 即時, 非歷史序列): "
+                f"{put_call_info['ratio']:.3f} -> score {put_call_info['score']:.1f}"
+            )
+        else:
+            logger.warning("Could not fetch live Put/Call ratio; skipping that overlay.")
+
     excluded_factors = [f.strip() for f in args.exclude_price_target_factors.split(",") if f.strip()]
     target_weights = {k: v for k, v in engine.weights.items() if k not in excluded_factors}
     if excluded_factors:
@@ -89,6 +114,19 @@ def main() -> None:
 
         print(f"\n=== {subject}: HFGI (last 5 rows) ===")
         print(hfgi_df[["HFGI", "State"]].tail())
+
+        adjusted_today = None
+        if put_call_info is not None:
+            score_cols = [c for c in hfgi_df.columns if c.endswith("_Score")]
+            last_scores = hfgi_df[score_cols].iloc[[-1]].copy()
+            last_scores["PutCall_Score"] = put_call_info["score"]
+            adjusted_today = float(combine_scores(last_scores, engine.weights).iloc[0])
+            raw_today = hfgi_df["HFGI"].iloc[-1]
+            if pd.notna(raw_today):
+                print(
+                    f"  即時調整後 HFGI(含 Put/Call,僅供今天參考,不影響回測): "
+                    f"{adjusted_today:.1f}(原始 {raw_today:.1f})"
+                )
 
         # Run the backtests first: both strategies share the same tier
         # thresholds (only the fractions differ), so tranche_count is
@@ -141,6 +179,8 @@ def main() -> None:
             "current_tranche_count": current_tranche_count,
             "price_targets": {str(k): v for k, v in price_targets.items()},
             "price_target_excluded_factors": excluded_factors,
+            "put_call": put_call_info,
+            "hfgi_adjusted_for_put_call": adjusted_today,
         }
         for strategy_name, result in backtest_results.items():
             summary = result.summary()

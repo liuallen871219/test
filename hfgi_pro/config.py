@@ -26,6 +26,24 @@ SAFE_HAVEN_TICKER = "TLT"
 CREDIT_RISK_TICKER = "HYG"
 CREDIT_SAFE_TICKER = "IEF"
 
+# Put/Call ratio (CNN Fear & Greed Index's last remaining component we had
+# no equivalent of): unlike every other factor, yfinance's option_chain()
+# only exposes today's *live* snapshot — Yahoo Finance has no historical
+# options data — so this can never be a rolling time series like the rest.
+# See hfgi_pro/put_call.py: it's a live-only overlay applied on top of a
+# day's already-computed HFGI, not part of the backtestable engine.
+PUT_CALL_TICKER = "QQQ"  # broad, liquid market proxy (CNN's own factor is
+                          # SPX-options-based, not per-stock)
+PUT_CALL_NUM_EXPIRATIONS = 3  # nearest N expirations, volume-weighted
+# Reference bands for turning a raw put/call volume ratio into a 0-100
+# score, since there's no history to percentile-rank against. Calibrated
+# from commonly-cited typical equity put/call ratio behavior (roughly
+# 0.5-0.8 in calm/greedy markets, spiking above 1.0-1.2 in fear events) —
+# not fit to this project's own data the way every other band-like
+# threshold in this file is; treat as a rough heuristic.
+PUT_CALL_GREED_RATIO = 0.7   # ratio <= this -> score 100 (greed)
+PUT_CALL_FEAR_RATIO = 1.3    # ratio >= this -> score 0 (fear)
+
 # Additional subjects to run the HFGI engine on individually (each gets its
 # own HFGI/State/sub-score table and backtest, using the same sector
 # benchmarks above for relative strength). ADR Premium only applies to
@@ -115,6 +133,15 @@ HFGI_WEIGHTS = {
     # investment-grade credit) — junk debt underperforming reads as credit
     # risk aversion / fear, regardless of what any one stock is doing.
     "credit_appetite": 12,
+    # Put/Call ratio (CNN's last component we had no equivalent of). Unlike
+    # every other weight here, this sub-score (PutCall_Score) is NaN for
+    # all of history and only ever gets a real value for *today*, injected
+    # live by hfgi_pro/put_call.py — it can't be backtested at all. The
+    # NaN-tolerant weighted average already handles that gracefully (falls
+    # out of the denominator on every historical row), so adding the key
+    # here doesn't change historical HFGI/backtests, only today's live
+    # reading when a caller chooses to inject it.
+    "put_call": 10,
 }
 
 # Rolling lookback window (trading days) used to percentile-rank raw
