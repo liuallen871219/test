@@ -1,7 +1,9 @@
 # HFGI Pro
 
 A Fear & Greed Index toolkit focused on SK Hynix (SKHY / 000660.KS), built
-against the semiconductor sector (SMH, SOXX).
+against the semiconductor sector (SMH, SOXX). The same engine also runs on
+a watchlist of other memory/semiconductor-adjacent tickers: `DRAM`
+(Roundhill Memory ETF), `QQQ` (Nasdaq-100), and `ALAB` (Astera Labs).
 
 ## Setup
 
@@ -17,16 +19,19 @@ python run.py --start 2019-01-01 --end 2026-07-18
 python run.py --refresh             # bypass the cache and force re-download
 ```
 
-This downloads OHLCV data for `SKHY`, `000660.KS`, `SMH`, `SOXX`, `^VIX` via
-`yfinance` through a reusable, caching `DataLoader`
+This downloads OHLCV data for every ticker in `config.TICKERS` (the
+watchlist `SKHY`/`DRAM`/`QQQ`/`ALAB`, plus `000660.KS`, `SMH`, `SOXX`,
+`^VIX`) via `yfinance` through a reusable, caching `DataLoader`
 (`hfgi_pro/data_loader.py`), then runs the full pipeline (indicators → HFGI
-engine → backtest) and writes everything under `data/`:
+engine → backtest) **for each ticker in `config.WATCHLIST`** and writes
+everything under `data/`:
 
 - `data/<TICKER>.parquet` — raw OHLCV per ticker
-- `data/hfgi.parquet` — HFGI, State, and each weighted sub-score
+- `data/hfgi_<TICKER>.parquet` — HFGI, State, and each weighted sub-score,
+  per watchlist ticker
+- `data/backtest_<TICKER>_trades.csv` / `_equity.parquet` — per ticker
 - `data/backtest_summary.json` — CAGR / Sharpe / Max Drawdown / Win Rate
-- `data/backtest_trades.csv` — individual trades
-- `data/backtest_equity.parquet` — strategy equity curve
+  for every watchlist ticker, keyed by ticker
 
 Cached downloads live in `data/cache/` and are reused for up to 24h before a
 fresh download is attempted; date-range filtering is applied in memory on
@@ -53,8 +58,16 @@ inverted since higher volatility reads as fear). The weights above sum to
 
 **Note on ADR Premium**: no FX-rate ticker was available, so `ADR Premium`
 is approximated as the cumulative-return spread between SKHY and
-000660.KS rather than an FX-adjusted price premium. `^VIX` is downloaded
-and cached for future macro-overlay use but isn't yet part of the formula.
+000660.KS rather than an FX-adjusted price premium. It only applies to
+`SKHY` itself — for the other watchlist tickers (`DRAM`, `QQQ`, `ALAB`,
+which have no ADR pair) it's simply omitted; the NaN-tolerant weighted
+average below re-normalizes over whichever sub-scores are available.
+`^VIX` is downloaded and cached for future macro-overlay use but isn't yet
+part of the formula.
+
+`HFGIEngine.compute(price_data, subject=...)` computes the index for any
+one ticker in `price_data` (defaults to `config.PRIMARY_TICKER`), always
+using `config.SECTOR_BENCHMARK_TICKERS` (SMH/SOXX) for Relative Strength.
 
 ## Task 4 — Backtest (`hfgi_pro/backtest.py`)
 
@@ -67,8 +80,9 @@ Reports CAGR, Sharpe Ratio, Max Drawdown, and Win Rate.
 streamlit run dashboard.py
 ```
 
-Shows the HFGI curve, price with SMAs and Buy/Sell markers, RSI, MACD,
-volume, and the ADR Premium proxy.
+A dropdown lets you pick any ticker in `config.WATCHLIST`. Shows the HFGI
+curve, price with SMAs and Buy/Sell markers, RSI, MACD, volume, and (for
+`SKHY` only) the ADR Premium proxy.
 
 ## Tests
 

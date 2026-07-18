@@ -12,12 +12,21 @@ ADR_REFERENCE_TICKER = "000660.KS"
 SECTOR_BENCHMARK_TICKERS = ["SMH", "SOXX"]
 MARKET_VOLATILITY_TICKER = "^VIX"
 
-TICKERS = [
-    PRIMARY_TICKER,
-    ADR_REFERENCE_TICKER,
-    *SECTOR_BENCHMARK_TICKERS,
-    MARKET_VOLATILITY_TICKER,
-]
+# Additional subjects to run the HFGI engine on individually (each gets its
+# own HFGI/State/sub-score table and backtest, using the same sector
+# benchmarks above for relative strength). ADR Premium only applies to
+# PRIMARY_TICKER; the others simply omit that sub-score.
+#   DRAM  - Roundhill Memory ETF (pure-play DRAM/memory sector)
+#   QQQ   - Invesco QQQ Trust (broad Nasdaq-100 market benchmark)
+#   ALAB  - Astera Labs (AI-datacenter connectivity chipmaker)
+WATCHLIST = [PRIMARY_TICKER, "DRAM", "QQQ", "ALAB"]
+
+TICKERS = sorted(set(
+    WATCHLIST
+    + [ADR_REFERENCE_TICKER]
+    + SECTOR_BENCHMARK_TICKERS
+    + [MARKET_VOLATILITY_TICKER]
+))
 
 # --- Indicator parameters ------------------------------------------------
 RSI_WINDOW = 14

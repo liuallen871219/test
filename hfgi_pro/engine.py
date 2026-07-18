@@ -36,14 +36,15 @@ class HFGIEngine:
     rolling_window: int = config.ROLLING_WINDOW
     momentum_window: int = config.MOMENTUM_WINDOW
 
-    def compute_indicators(self, price_data: Dict[str, pd.DataFrame]) -> pd.DataFrame:
-        """Return the raw indicator table for the primary ticker."""
-        primary = price_data[config.PRIMARY_TICKER]
-        close = primary["Close"]
+    def compute_indicators(self, price_data: Dict[str, pd.DataFrame], subject: str = None) -> pd.DataFrame:
+        """Return the raw indicator table for `subject` (defaults to config.PRIMARY_TICKER)."""
+        subject = subject or config.PRIMARY_TICKER
+        subject_ohlcv = price_data[subject]
+        close = subject_ohlcv["Close"]
 
-        ind = pd.DataFrame(index=primary.index)
+        ind = pd.DataFrame(index=subject_ohlcv.index)
         ind["Close"] = close
-        ind["Volume"] = primary["Volume"]
+        ind["Volume"] = subject_ohlcv["Volume"]
         ind["RSI"] = indicators.rsi(close, config.RSI_WINDOW)
 
         macd_df = indicators.macd(close, config.MACD_FAST, config.MACD_SLOW, config.MACD_SIGNAL)
@@ -51,11 +52,11 @@ class HFGIEngine:
         ind["MACD_Signal"] = macd_df["signal"]
         ind["MACD_Hist"] = macd_df["histogram"]
 
-        ind["ATR"] = indicators.atr(primary, config.ATR_WINDOW)
+        ind["ATR"] = indicators.atr(subject_ohlcv, config.ATR_WINDOW)
         for w in config.SMA_WINDOWS:
             ind[f"SMA{w}"] = indicators.sma(close, w)
         ind["Drawdown"] = indicators.drawdown(close)
-        ind["VolumeRatio"] = indicators.volume_ratio(primary["Volume"], config.VOLUME_SMA_WINDOW)
+        ind["VolumeRatio"] = indicators.volume_ratio(subject_ohlcv["Volume"], config.VOLUME_SMA_WINDOW)
         ind["ROC"] = indicators.roc(close, self.momentum_window)
         return ind
 
@@ -70,14 +71,18 @@ class HFGIEngine:
         benchmark_roc = pd.concat(benchmark_rocs, axis=1).mean(axis=1)
         return ind["ROC"] - benchmark_roc
 
-    def _adr_premium_raw(self, ind: pd.DataFrame, price_data: Dict[str, pd.DataFrame]) -> pd.Series:
+    def _adr_premium_raw(self, ind: pd.DataFrame, price_data: Dict[str, pd.DataFrame], subject: str) -> pd.Series:
         """Proxy for ADR premium: the spread between the primary listing's
         and the reference listing's cumulative return since the start of
         the series. No FX-rate ticker is available in this dataset, so this
         is a return-spread proxy rather than an FX-adjusted price premium.
+
+        Only meaningful for the SKHY/000660.KS dual-listing pair; other
+        watchlist subjects (an ETF, an unrelated stock) have no ADR
+        reference, so this sub-score is simply omitted for them.
         """
         ref_ticker = config.ADR_REFERENCE_TICKER
-        if ref_ticker not in price_data:
+        if subject != config.PRIMARY_TICKER or ref_ticker not in price_data:
             return pd.Series(index=ind.index, dtype=float)
 
         ref_close = price_data[ref_ticker]["Close"].reindex(ind.index).ffill()
@@ -92,14 +97,15 @@ class HFGIEngine:
         ref_cum_return = ref_close / ref_base - 1.0
         return primary_cum_return - ref_cum_return
 
-    def compute(self, price_data: Dict[str, pd.DataFrame]) -> pd.DataFrame:
-        """Compute the full HFGI table: Date (index), HFGI, State, and each
-        weighted sub-score.
+    def compute(self, price_data: Dict[str, pd.DataFrame], subject: str = None) -> pd.DataFrame:
+        """Compute the full HFGI table for `subject`: Date (index), HFGI,
+        State, and each weighted sub-score. Defaults to config.PRIMARY_TICKER.
         """
-        ind = self.compute_indicators(price_data)
+        subject = subject or config.PRIMARY_TICKER
+        ind = self.compute_indicators(price_data, subject)
 
         relative_strength_raw = self._relative_strength_raw(ind, price_data)
-        adr_premium_raw = self._adr_premium_raw(ind, price_data)
+        adr_premium_raw = self._adr_premium_raw(ind, price_data, subject)
 
         scores = pd.DataFrame(index=ind.index)
         scores["PriceMomentum_Score"] = _percentile_score(ind["ROC"], self.rolling_window)

@@ -19,7 +19,11 @@ def rsi(series: pd.Series, window: int = 14) -> pd.Series:
     avg_loss = loss.ewm(alpha=1 / window, min_periods=window, adjust=False).mean()
     rs = avg_gain / avg_loss.replace(0, np.nan)
     result = 100 - (100 / (1 + rs))
-    return result.fillna(100)  # zero average loss => maximally overbought
+    # avg_loss == 0 (no losses anywhere in the window) means "maximally
+    # overbought" once the window is actually full; don't confuse that with
+    # avg_gain/avg_loss still being NaN because there isn't enough history yet.
+    no_losses_in_full_window = avg_loss.eq(0) & avg_gain.notna()
+    return result.where(~no_losses_in_full_window, 100)
 
 
 def macd(series: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9) -> pd.DataFrame:

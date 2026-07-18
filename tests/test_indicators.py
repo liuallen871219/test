@@ -24,6 +24,15 @@ def test_rsi_bounded_between_0_and_100():
     assert (rsi >= 0).all() and (rsi <= 100).all()
 
 
+def test_rsi_is_nan_when_history_shorter_than_window():
+    """A ticker with only a handful of trading days (e.g. one that just IPO'd)
+    should read as NaN, not get misread as '0 losses ever -> maximally
+    overbought'."""
+    close = pd.Series([100.0, 101.0, 99.0, 100.5, 102.0, 101.5])
+    rsi = indicators.rsi(close, 14)
+    assert rsi.isna().all()
+
+
 def test_rsi_is_high_for_strictly_rising_series():
     close = pd.Series(np.arange(1, 40, dtype=float))
     rsi = indicators.rsi(close, 14)

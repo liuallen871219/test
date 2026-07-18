@@ -1,14 +1,16 @@
 """HFGI Pro pipeline entry point.
 
 Downloads/caches OHLCV data for the configured ticker universe, computes the
-HFGI composite index, and runs the contrarian backtest. Results are written
-under `data/`:
+HFGI composite index for each ticker in the watchlist, and runs the
+contrarian backtest for each. Results are written under `data/`:
 
-  data/<TICKER>.parquet          raw OHLCV per ticker
-  data/hfgi.parquet              HFGI, State, and each weighted sub-score
-  data/backtest_equity.parquet   strategy equity curve
-  data/backtest_trades.csv       individual trades
-  data/backtest_summary.json     CAGR / Sharpe / Max Drawdown / Win Rate
+  data/<TICKER>.parquet                  raw OHLCV per ticker
+  data/hfgi_<TICKER>.parquet             HFGI, State, and each weighted
+                                          sub-score, per watchlist ticker
+  data/backtest_<TICKER>_equity.parquet  strategy equity curve, per ticker
+  data/backtest_<TICKER>_trades.csv      individual trades, per ticker
+  data/backtest_summary.json             CAGR / Sharpe / Max Drawdown /
+                                          Win Rate for every watchlist ticker
 """
 
 from __future__ import annotations
@@ -44,33 +46,37 @@ def main() -> None:
     loader = DataLoader()
     price_data = loader.get_many(config.TICKERS, start=args.start, end=args.end, refresh=args.refresh)
 
-    if config.PRIMARY_TICKER not in price_data:
-        raise RuntimeError(
-            f"Failed to obtain data for primary ticker {config.PRIMARY_TICKER!r}; aborting."
-        )
-
     for ticker, df in price_data.items():
         out_path = data_dir / f"{config.sanitize_ticker(ticker)}.parquet"
         df.to_parquet(out_path)
         logger.info("Saved %s (%d rows) -> %s", ticker, len(df), out_path)
 
     engine = HFGIEngine()
-    hfgi_df = engine.compute(price_data)
-    hfgi_df.to_parquet(data_dir / "hfgi.parquet")
-    logger.info("Saved HFGI scores -> %s", data_dir / "hfgi.parquet")
+    all_summaries = {}
 
-    result = run_backtest(hfgi_df)
-    summary = result.summary()
-    (data_dir / "backtest_summary.json").write_text(json.dumps(summary, indent=2, default=str))
-    result.trades.to_csv(data_dir / "backtest_trades.csv", index=False)
-    result.equity_curve.to_frame("Equity").to_parquet(data_dir / "backtest_equity.parquet")
-    logger.info("Backtest summary: %s", summary)
+    for subject in config.WATCHLIST:
+        if subject not in price_data:
+            logger.warning("Skipping %s: no data available.", subject)
+            continue
 
+        hfgi_df = engine.compute(price_data, subject=subject)
+        tag = config.sanitize_ticker(subject)
+        hfgi_df.to_parquet(data_dir / f"hfgi_{tag}.parquet")
+        logger.info("Saved %s HFGI scores -> %s", subject, data_dir / f"hfgi_{tag}.parquet")
+
+        result = run_backtest(hfgi_df)
+        summary = result.summary()
+        all_summaries[subject] = summary
+        result.trades.to_csv(data_dir / f"backtest_{tag}_trades.csv", index=False)
+        result.equity_curve.to_frame("Equity").to_parquet(data_dir / f"backtest_{tag}_equity.parquet")
+        logger.info("%s backtest summary: %s", subject, summary)
+
+        print(f"\n=== {subject}: HFGI (last 5 rows) ===")
+        print(hfgi_df[["HFGI", "State"]].tail())
+        print(f"{subject} backtest summary: {summary}")
+
+    (data_dir / "backtest_summary.json").write_text(json.dumps(all_summaries, indent=2, default=str))
     print("\n=== HFGI Pro pipeline complete ===")
-    print(hfgi_df[["HFGI", "State"]].tail())
-    print("\nBacktest summary:")
-    for key, value in summary.items():
-        print(f"  {key}: {value}")
 
 
 if __name__ == "__main__":
