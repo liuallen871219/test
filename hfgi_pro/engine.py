@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, Optional
+from typing import Dict
 
+import numpy as np
 import pandas as pd
 
 from . import config, indicators
@@ -121,9 +122,13 @@ class HFGIEngine:
             "Drawdown_Score": self.weights["drawdown"],
             "ADRPremium_Score": self.weights["adr_premium"],
         }
-        total_weight = sum(weight_map.values())
-        weighted_sum = sum(scores[col] * w for col, w in weight_map.items())
-        hfgi = weighted_sum / total_weight
+        # Weighted average that ignores any sub-score missing for a given row
+        # (e.g. no ADR reference ticker was supplied), rather than letting a
+        # single NaN column blank out the whole composite.
+        weights = pd.Series(weight_map)
+        weighted_sum = scores.fillna(0).mul(weights, axis=1).sum(axis=1)
+        available_weight = scores.notna().mul(weights, axis=1).sum(axis=1)
+        hfgi = (weighted_sum / available_weight.replace(0, np.nan))
 
         result = pd.DataFrame(index=ind.index)
         result["HFGI"] = hfgi

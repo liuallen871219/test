@@ -52,6 +52,21 @@ def test_engine_output_has_expected_columns_and_bounded_hfgi():
     assert result["State"].dropna().isin(list(config.STATE_THRESHOLDS.keys()) + ["Unknown"]).all()
 
 
+def test_engine_hfgi_survives_missing_reference_ticker():
+    """A missing ADR reference (e.g. analyzing an ETF with no ADR pair)
+    should not blank out the whole HFGI via a single all-NaN sub-score."""
+    price_data = _fake_price_data()
+    del price_data[config.ADR_REFERENCE_TICKER]
+
+    engine = HFGIEngine()
+    result = engine.compute(price_data)
+
+    assert result["ADRPremium_Score"].isna().all()
+    hfgi = result["HFGI"].dropna()
+    assert len(hfgi) > 0
+    assert (hfgi >= 0).all() and (hfgi <= 100).all()
+
+
 def test_backtest_runs_and_produces_bounded_metrics():
     price_data = _fake_price_data()
     engine = HFGIEngine()
