@@ -90,6 +90,29 @@ def test_engine_hfgi_survives_missing_reference_ticker():
     assert (hfgi >= 0).all() and (hfgi <= 100).all()
 
 
+def test_engine_relative_strength_excludes_subject_from_its_own_benchmark():
+    """When the subject is itself one of the sector benchmark tickers (e.g.
+    SOXX, added to WATCHLIST as a sector-wide reading), comparing it to a
+    benchmark blend that includes itself dilutes Relative Strength toward
+    zero instead of reflecting genuine relative performance."""
+    price_data = _fake_price_data()
+    engine = HFGIEngine()
+
+    _, _, extras_as_subject = engine.compute_subscores(price_data, subject="SOXX")
+    # Recompute what the (broken) self-inclusive benchmark would have been:
+    # SOXX's ROC minus the average of (SMH, SOXX) ROC.
+    soxx_roc = engine.compute_indicators(price_data, subject="SOXX")["ROC"]
+    smh_roc = price_data["SMH"]["Close"].pct_change(engine.momentum_window)
+    self_inclusive_benchmark = pd.concat([smh_roc, soxx_roc], axis=1).mean(axis=1)
+    self_inclusive_relative_strength = soxx_roc - self_inclusive_benchmark
+
+    # The fixed version should differ from (and generally have larger
+    # magnitude than) the self-inclusive one, since it's benchmarked only
+    # against SMH.
+    diff = (extras_as_subject["relative_strength_raw"] - self_inclusive_relative_strength).dropna()
+    assert (diff.abs() > 1e-9).any()
+
+
 def test_engine_hfgi_survives_missing_vix():
     """No ^VIX ticker supplied should degrade gracefully, same as ADR Premium."""
     price_data = _fake_price_data()

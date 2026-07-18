@@ -100,11 +100,18 @@ class HFGIEngine:
         ind["ROC"] = indicators.roc(close, self.momentum_window)
         return ind
 
-    def _relative_strength_raw(self, ind: pd.DataFrame, price_data: Dict[str, pd.DataFrame]) -> pd.Series:
+    def _relative_strength_raw(self, ind: pd.DataFrame, price_data: Dict[str, pd.DataFrame], subject: str) -> pd.Series:
+        """Subject's momentum vs. the sector benchmark's. Excludes `subject`
+        itself from the benchmark set — otherwise a subject that's also one
+        of config.SECTOR_BENCHMARK_TICKERS (e.g. SOXX, which is itself a
+        semiconductor-sector ETF) would be compared partly against its own
+        momentum, diluting the signal toward zero instead of reflecting real
+        sector-relative performance.
+        """
         benchmark_rocs = [
             indicators.roc(price_data[t]["Close"], self.momentum_window).reindex(ind.index)
             for t in config.SECTOR_BENCHMARK_TICKERS
-            if t in price_data
+            if t in price_data and t != subject
         ]
         if not benchmark_rocs:
             return pd.Series(index=ind.index, dtype=float)
@@ -155,7 +162,7 @@ class HFGIEngine:
         subject = subject or config.PRIMARY_TICKER
         ind = self.compute_indicators(price_data, subject)
 
-        relative_strength_raw = self._relative_strength_raw(ind, price_data)
+        relative_strength_raw = self._relative_strength_raw(ind, price_data, subject)
         adr_premium_raw = self._adr_premium_raw(ind, price_data, subject)
         vix_close = self._vix_close(ind, price_data)
 
