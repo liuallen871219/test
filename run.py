@@ -90,45 +90,62 @@ def main() -> None:
         print(f"\n=== {subject}: HFGI (last 5 rows) ===")
         print(hfgi_df[["HFGI", "State"]].tail())
 
-        tier_thresholds = [t["threshold"] for t in config.ADD_ON_STRATEGIES[config.DEFAULT_ADD_ON_STRATEGY]]
-        all_thresholds = tier_thresholds + [config.BACKTEST_SELL_THRESHOLD]
-        price_targets = estimate_price_targets(price_data, subject, all_thresholds, engine=engine, weights=target_weights)
-        last_close = float(hfgi_df["Close"].dropna().iloc[-1]) if hfgi_df["Close"].notna().any() else None
-
-        def format_target(price):
-            # estimate_price_targets always returns a number (extrapolating to
-            # the search-range boundary rather than giving up) except when
-            # there's not enough history to evaluate the model at all.
-            if price is None or last_close is None:
-                return "歷史資料不足,無法估計", "N/A"
-            pct = f"{(price / last_close - 1) * 100:+.1f}%"
-            note = " (外插估計,已達搜尋範圍邊界)" if price <= last_close * 0.051 or price >= last_close * 2.99 else ""
-            return f"{price:.2f}{note}", pct
-
-        print(f"{subject} 加倉/出場目標價格 (現價 {last_close}):")
-        for strategy_name, tiers in config.ADD_ON_STRATEGIES.items():
-            print(f"  [{strategy_name}]")
-            for tier in tiers:
-                price_str, pct = format_target(price_targets.get(tier["threshold"]))
-                print(f"    HFGI<{tier['threshold']} 加碼{tier['fraction'] * 100:.0f}% -> 目標價 {price_str} ({pct})")
-        exit_str, exit_pct = format_target(price_targets.get(config.BACKTEST_SELL_THRESHOLD))
-        print(f"    HFGI>{config.BACKTEST_SELL_THRESHOLD} 全數出場 -> 目標價 {exit_str} ({exit_pct})")
-
-        all_summaries[subject] = {
-            "last_close": last_close,
-            "price_targets": {str(k): v for k, v in price_targets.items()},
-            "price_target_excluded_factors": excluded_factors,
-        }
+        # Run the backtests first: both strategies share the same tier
+        # thresholds (only the fractions differ), so tranche_count is
+        # identical between them — it tells us which tiers are still ahead
+        # vs. already triggered this cycle, so we don't print a "target
+        # price" for a tier that's moot because it already fired.
+        backtest_results = {}
         for strategy_name, tiers in config.ADD_ON_STRATEGIES.items():
             result = run_backtest(hfgi_df, tiers=tiers)
-            summary = result.summary()
-            summary["recommendation"] = result.recommendation
-            all_summaries[subject][strategy_name] = summary
-
+            backtest_results[strategy_name] = result
             result.trades.to_csv(data_dir / f"backtest_{tag}_{strategy_name}_trades.csv", index=False)
             result.equity_curve.to_frame("Equity").to_parquet(
                 data_dir / f"backtest_{tag}_{strategy_name}_equity.parquet"
             )
+
+        any_result = next(iter(backtest_results.values()))
+        current_tranche_count = int(any_result.tranche_count.iloc[-1]) if len(any_result.tranche_count) else 0
+        n_tiers = len(config.ADD_ON_STRATEGIES[config.DEFAULT_ADD_ON_STRATEGY])
+
+        upcoming_thresholds = [
+            t["threshold"] for t in config.ADD_ON_STRATEGIES[config.DEFAULT_ADD_ON_STRATEGY][current_tranche_count:]
+        ]
+        all_thresholds = upcoming_thresholds + [config.BACKTEST_SELL_THRESHOLD]
+        price_targets = estimate_price_targets(price_data, subject, all_thresholds, engine=engine, weights=target_weights)
+        last_close = float(hfgi_df["Close"].dropna().iloc[-1]) if hfgi_df["Close"].notna().any() else None
+
+        def format_target(threshold):
+            info = price_targets.get(threshold, {"price": None, "exact": False})
+            price = info["price"]
+            if price is None or last_close is None:
+                return "歷史資料不足,無法估計", "N/A"
+            pct = f"{(price / last_close - 1) * 100:+.1f}%"
+            note = "" if info["exact"] else " (未達門檻:即使漲跌到此仍不夠,非精確解)"
+            return f"{price:.2f}{note}", pct
+
+        print(f"{subject} 加倉/出場目標價格 (現價 {last_close}, 目前 {current_tranche_count}/{n_tiers} 批已進場):")
+        if current_tranche_count >= n_tiers:
+            print("    已滿倉,無下一批加碼門檻")
+        else:
+            for strategy_name, tiers in config.ADD_ON_STRATEGIES.items():
+                print(f"  [{strategy_name}] 剩餘可加碼批次:")
+                for tier in tiers[current_tranche_count:]:
+                    price_str, pct = format_target(tier["threshold"])
+                    print(f"    HFGI<{tier['threshold']} 加碼{tier['fraction'] * 100:.0f}% -> 目標價 {price_str} ({pct})")
+        exit_str, exit_pct = format_target(config.BACKTEST_SELL_THRESHOLD)
+        print(f"    HFGI>{config.BACKTEST_SELL_THRESHOLD} 全數出場 -> 目標價 {exit_str} ({exit_pct})")
+
+        all_summaries[subject] = {
+            "last_close": last_close,
+            "current_tranche_count": current_tranche_count,
+            "price_targets": {str(k): v for k, v in price_targets.items()},
+            "price_target_excluded_factors": excluded_factors,
+        }
+        for strategy_name, result in backtest_results.items():
+            summary = result.summary()
+            summary["recommendation"] = result.recommendation
+            all_summaries[subject][strategy_name] = summary
             logger.info("%s [%s] backtest summary: %s", subject, strategy_name, summary)
             print(f"{subject} [{strategy_name}]: {summary}")
             print(f"  -> {result.recommendation['message']}")

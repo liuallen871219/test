@@ -132,39 +132,40 @@ def _hfgi_as_function_of_price(ind: pd.DataFrame, scores: pd.DataFrame, extras: 
     return hfgi
 
 
-def _bisect(f, target: float, lo: float, hi: float, tol: float = 0.01, max_iter: int = 60) -> Optional[float]:
+def _bisect(f, target: float, lo: float, hi: float, tol: float = 0.01, max_iter: int = 60):
     """Find price P in [lo, hi] with f(P) == target. f is assumed
     monotonic non-decreasing over [lo, hi] (true here except at the very
     extremes, where ATR-driven "any big move reads as fear" can flatten it).
 
-    If `target` isn't actually reachable within [lo, hi] — e.g. a fixed
-    factor (Volume/VIX) or the ATR ceiling caps how far HFGI can move by
-    price alone — this returns the boundary (lo or hi) closest to it
-    instead of None/NaN, since "the most extreme price in a very wide,
-    already-generous range" is still a usable answer, just not an exact
-    root. Returns None only when f itself can't be evaluated (NaN inputs,
-    e.g. insufficient history) — a fundamentally different failure than
-    "reachable in principle, just not within this range."
+    Returns (price, exact). `price` is None only when f itself can't be
+    evaluated (NaN inputs, e.g. insufficient history). Otherwise `price`
+    is always numeric: if `target` isn't reachable within [lo, hi] — a
+    fixed factor (Volume/VIX/Breadth) or the ATR ceiling can cap how far
+    HFGI moves by price alone — it returns the boundary (lo or hi) with
+    `exact=False`, since [lo, hi] is deliberately a *realistic* single-day
+    move range (see config.PRICE_TARGET_LOW_MULT/HIGH_MULT): the boundary
+    price itself is a meaningful statement ("even a move this large
+    wouldn't quite reach it"), just not an exact root.
     """
     f_lo, f_hi = f(lo), f(hi)
     if any(pd.isna(v) for v in (f_lo, f_hi)):
-        return None
+        return None, False
     if f_lo > f_hi:
         lo, hi, f_lo, f_hi = hi, lo, f_hi, f_lo
     if target <= f_lo:
-        return lo
+        return lo, False
     if target >= f_hi:
-        return hi
+        return hi, False
     for _ in range(max_iter):
         mid = (lo + hi) / 2
         f_mid = f(mid)
         if abs(f_mid - target) < tol or (hi - lo) < 0.01:
-            return mid
+            return mid, True
         if f_mid < target:
             lo = mid
         else:
             hi = mid
-    return (lo + hi) / 2
+    return (lo + hi) / 2, False
 
 
 def estimate_price_targets(
@@ -174,19 +175,24 @@ def estimate_price_targets(
     engine: HFGIEngine = None,
     weights: Dict[str, float] = None,
     smoothing_window: int = None,
-) -> Dict[float, Optional[float]]:
+) -> Dict[float, dict]:
     """For each HFGI_Smoothed level in `thresholds` (add-on/exit decisions
     trigger off the smoothed series, see backtest.run_backtest), estimate
     today's closing price that would produce it. Holds non-price-derived
     sub-scores fixed at their latest actual values (pass `weights` without
     a factor's key to exclude it from the solve entirely instead).
 
-    Always returns a numeric price per threshold — never NaN/None — except
-    when there isn't enough history to evaluate the model at all (e.g. a
-    newly-listed ticker like SKHY). A threshold outside what's achievable
-    within the (already wide, 0.05x-3x) search range still returns the
-    closest boundary price reached rather than giving up; see `_bisect`.
-    Returns {threshold: price}.
+    Returns {threshold: {"price": float_or_None, "exact": bool}}. `price`
+    is only None when there isn't enough history to evaluate the model at
+    all (e.g. a newly-listed ticker like SKHY). Otherwise it's always a
+    number within [close * PRICE_TARGET_LOW_MULT, close * PRICE_TARGET_HIGH_MULT]
+    — a realistic single-day-move range, not the wide, meaningless-at-the-
+    boundary range this used before. `exact=False` means the threshold
+    wasn't reachable within that range and `price` is the boundary instead
+    (e.g. a fixed factor or the ATR ceiling caps how far HFGI can move by
+    price alone) — still a meaningful statement ("not reachable even with
+    a move this large"), just not an exact root; callers should present it
+    differently from an exact solve.
     """
     engine = engine or HFGIEngine()
     weights = weights or engine.weights
@@ -195,11 +201,11 @@ def estimate_price_targets(
 
     min_history = max(engine.momentum_window, config.RSI_WINDOW, config.MACD_SLOW, config.ATR_WINDOW) + 1
     if len(ind) < min_history or ind["Close"].iloc[-2:].isna().any():
-        return {t: None for t in thresholds}
+        return {t: {"price": None, "exact": False} for t in thresholds}
 
     hfgi_fn = _hfgi_as_function_of_price(ind, scores, extras, subject, engine, weights)
     last_close = float(ind["Close"].iloc[-1])
-    lo, hi = last_close * 0.05, last_close * 3.0
+    lo, hi = last_close * config.PRICE_TARGET_LOW_MULT, last_close * config.PRICE_TARGET_HIGH_MULT
 
     # HFGI_Smoothed is a simple moving average over `smoothing_window` days
     # including today. Today's raw HFGI is the only unknown (the prior
@@ -208,10 +214,14 @@ def estimate_price_targets(
     # raw_hfgi(P) == threshold * window - sum(prior raw HFGI values).
     prior_raw_hfgi = combine_scores(scores, weights).iloc[-smoothing_window:-1]
     if len(prior_raw_hfgi) < smoothing_window - 1 or prior_raw_hfgi.isna().any():
-        return {t: None for t in thresholds}
+        return {t: {"price": None, "exact": False} for t in thresholds}
     prior_sum = float(prior_raw_hfgi.sum())
 
     def raw_target_for_smoothed(threshold: float) -> float:
         return threshold * smoothing_window - prior_sum
 
-    return {t: _bisect(hfgi_fn, raw_target_for_smoothed(t), lo, hi) for t in thresholds}
+    results = {}
+    for t in thresholds:
+        price, exact = _bisect(hfgi_fn, raw_target_for_smoothed(t), lo, hi)
+        results[t] = {"price": price, "exact": exact}
+    return results

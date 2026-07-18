@@ -230,17 +230,30 @@ though a real move that size would likely shift those too (Breadth is
 inherently about the rest of the watchlist, so it couldn't be re-derived
 from the subject's own hypothetical price anyway).
 
-`estimate_price_targets(...)` always returns a number per threshold —
-never NaN/None — with one exception: a ticker with too little history to
-evaluate the model at all (e.g. `SKHY`'s ~6 rows). A large single-day
-move raises ATR (and thus reads as more "fear," pulling the score back
-down) regardless of direction, and holding Volume/VIX/Breadth fixed adds
-its own floor/ceiling on top of that, so a tier's exact HFGI target can sit
-outside what's reachable within the (already wide, 0.05x-3x) search
-range; rather than giving up with `None`, `_bisect` returns the closest
-boundary price in that range, and `run.py` labels it "外插估計,已達搜尋
-範圍邊界" (extrapolated, hit the search-range boundary) so it's clearly
-distinguishable from an exact solve.
+`estimate_price_targets(...)` returns `{threshold: {"price": ..., "exact":
+...}}`. `price` is only `None` when there isn't enough history to
+evaluate the model at all (e.g. `SKHY`'s ~6 rows) — otherwise it's always
+a number within `[close * PRICE_TARGET_LOW_MULT, close * PRICE_TARGET_HIGH_MULT]`
+(±40%/+60% by default): a realistic single-day-move range, not a search
+range so wide that hitting its boundary produces a meaningless price (an
+earlier version searched 0.05x-3x, so an unreachable tier could show a
+"target price" like -95% or +200%, which isn't a real single-day move for
+a liquid stock). A large single-day move raises ATR (and thus reads as
+more "fear," pulling the score back down) regardless of direction, and
+holding Volume/VIX/Breadth fixed adds its own floor/ceiling on top of
+that, so a tier's exact HFGI target can still sit outside even this
+realistic range — in which case `exact=False` and `price` is the boundary
+itself (still meaningful: "not reachable even with a move this large"),
+and `run.py` labels it accordingly rather than presenting it as a normal
+target price.
+
+`run.py` also only prints tiers *still ahead* of a ticker's current
+add-on state — e.g. once a ticker has already filled tranche 1, showing
+"target price to enter tranche 1" is moot (it already happened this
+cycle); only tranche 2 onward and the exit price are relevant going
+forward. This uses the tranche count from `run_backtest`'s result, which
+is identical between `pyramid` and `inverse_pyramid` (only the fractions
+differ, not the trigger thresholds).
 
 `estimate_price_targets(..., weights=...)` accepts a weights override, so
 you can drop a normally-fixed factor from the solve entirely instead of

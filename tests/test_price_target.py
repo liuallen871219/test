@@ -42,11 +42,12 @@ def test_price_target_at_current_close_reproduces_actual_hfgi():
     actual_smoothed_hfgi = hfgi_df["HFGI_Smoothed"].iloc[-1]
 
     # Solving for the actual current HFGI_Smoothed level should land right
-    # back on (approximately) today's real closing price.
+    # back on (approximately) today's real closing price, and be an exact solve.
     targets = estimate_price_targets(price_data, config.PRIMARY_TICKER, [actual_smoothed_hfgi], engine=engine)
-    price = targets[actual_smoothed_hfgi]
-    assert price is not None
-    assert np.isclose(price, hfgi_df["Close"].iloc[-1], rtol=0.02)
+    result = targets[actual_smoothed_hfgi]
+    assert result["price"] is not None
+    assert result["exact"] is True
+    assert np.isclose(result["price"], hfgi_df["Close"].iloc[-1], rtol=0.02)
 
 
 def test_price_target_for_lower_hfgi_is_a_lower_price():
@@ -54,26 +55,28 @@ def test_price_target_for_lower_hfgi_is_a_lower_price():
     engine = HFGIEngine()
     targets = estimate_price_targets(price_data, config.PRIMARY_TICKER, [40, 20], engine=engine)
     # Non-strict: both thresholds can legitimately collapse to the same
-    # extrapolated boundary price if neither is exactly reachable within
-    # the search range (monotonic non-decreasing, never reversed).
-    assert targets[20] <= targets[40]
+    # boundary price if neither is exactly reachable within the (realistic)
+    # search range (monotonic non-decreasing, never reversed).
+    assert targets[20]["price"] <= targets[40]["price"]
 
 
-def test_price_target_extrapolates_to_boundary_instead_of_none_when_unreachable():
+def test_price_target_stays_within_realistic_bounds_when_unreachable():
     """0.001 and 99.999 are extreme edges very unlikely to be exactly
     reachable while other sub-scores stay pinned at today's actual values
-    — but the function should still return a usable number (the closest
-    boundary price within the search range), never NaN/None, for a target
-    that's reachable in principle just not within this range."""
+    — but the function should still return a usable, *realistic* number
+    (within config.PRICE_TARGET_LOW_MULT/HIGH_MULT of today's close), not
+    an absurd single-day move, and should flag it as inexact."""
     price_data = _fake_price_data()
     engine = HFGIEngine()
     ind, _scores, _extras = engine.compute_subscores(price_data, subject=config.PRIMARY_TICKER)
     last_close = float(ind["Close"].iloc[-1])
 
     targets = estimate_price_targets(price_data, config.PRIMARY_TICKER, [0.001, 99.999], engine=engine)
-    assert targets[0.001] is not None and targets[99.999] is not None
-    assert 0 < targets[0.001] <= last_close
-    assert targets[99.999] >= last_close
+    low, high = targets[0.001], targets[99.999]
+    assert low["price"] is not None and high["price"] is not None
+    assert low["exact"] is False and high["exact"] is False
+    assert last_close * config.PRICE_TARGET_LOW_MULT <= low["price"] <= last_close
+    assert last_close <= high["price"] <= last_close * config.PRICE_TARGET_HIGH_MULT
 
 
 def test_price_target_handles_newly_listed_ticker_without_crashing():
@@ -84,4 +87,8 @@ def test_price_target_handles_newly_listed_ticker_without_crashing():
     price_data[config.PRIMARY_TICKER] = price_data[config.PRIMARY_TICKER].iloc[-6:]
     engine = HFGIEngine()
     targets = estimate_price_targets(price_data, config.PRIMARY_TICKER, [30, 20, 10], engine=engine)
-    assert targets == {30: None, 20: None, 10: None}
+    assert targets == {
+        30: {"price": None, "exact": False},
+        20: {"price": None, "exact": False},
+        10: {"price": None, "exact": False},
+    }

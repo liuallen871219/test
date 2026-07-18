@@ -147,6 +147,18 @@ ADD_ON_STRATEGIES = {
 DEFAULT_ADD_ON_STRATEGY = "pyramid"
 BACKTEST_BUY_THRESHOLD = ADD_ON_STRATEGIES[DEFAULT_ADD_ON_STRATEGY][0]["threshold"]  # display/back-compat
 BACKTEST_SELL_THRESHOLD = 70
+
+# price_target.estimate_price_targets searches for a hypothetical closing
+# price within [close * LOW_MULT, close * HIGH_MULT]. A -95%/+200% single
+# day move isn't a real price target for a liquid large/mid-cap stock —
+# it's an artifact of a search range wide enough that hitting its boundary
+# doesn't mean anything. These bounds are already generous (a >40% single
+# day move is extremely rare even for volatile individual stocks); a
+# threshold still unreachable within them means "not achievable via price
+# alone within a plausible single-day move," which is what gets reported,
+# rather than a specific but meaningless boundary price.
+PRICE_TARGET_LOW_MULT = 0.6
+PRICE_TARGET_HIGH_MULT = 1.6
 # Round-trip cost (commission + slippage) charged on every entry and exit,
 # in basis points of the trade price. A prior version ran 39 trades over
 # QQQ's history at zero cost, which meaningfully overstated CAGR/Sharpe.
