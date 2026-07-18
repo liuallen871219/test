@@ -53,17 +53,27 @@ def test_price_target_for_lower_hfgi_is_a_lower_price():
     price_data = _fake_price_data()
     engine = HFGIEngine()
     targets = estimate_price_targets(price_data, config.PRIMARY_TICKER, [40, 20], engine=engine)
-    if targets[40] is not None and targets[20] is not None:
-        assert targets[20] < targets[40]
+    # Non-strict: both thresholds can legitimately collapse to the same
+    # extrapolated boundary price if neither is exactly reachable within
+    # the search range (monotonic non-decreasing, never reversed).
+    assert targets[20] <= targets[40]
 
 
-def test_price_target_returns_none_when_unreachable():
+def test_price_target_extrapolates_to_boundary_instead_of_none_when_unreachable():
+    """0.001 and 99.999 are extreme edges very unlikely to be exactly
+    reachable while other sub-scores stay pinned at today's actual values
+    — but the function should still return a usable number (the closest
+    boundary price within the search range), never NaN/None, for a target
+    that's reachable in principle just not within this range."""
     price_data = _fake_price_data()
     engine = HFGIEngine()
-    # 0 and 100 are extreme edges that are very unlikely to be reachable
-    # while other sub-scores stay pinned at today's actual values.
-    targets = estimate_price_targets(price_data, config.PRIMARY_TICKER, [0.001], engine=engine)
-    assert 0.001 in targets  # either a (very low) price or None; just shouldn't raise
+    ind, _scores, _extras = engine.compute_subscores(price_data, subject=config.PRIMARY_TICKER)
+    last_close = float(ind["Close"].iloc[-1])
+
+    targets = estimate_price_targets(price_data, config.PRIMARY_TICKER, [0.001, 99.999], engine=engine)
+    assert targets[0.001] is not None and targets[99.999] is not None
+    assert 0 < targets[0.001] <= last_close
+    assert targets[99.999] >= last_close
 
 
 def test_price_target_handles_newly_listed_ticker_without_crashing():

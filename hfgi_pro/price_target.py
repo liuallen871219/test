@@ -128,13 +128,28 @@ def _hfgi_as_function_of_price(ind: pd.DataFrame, scores: pd.DataFrame, extras: 
 
 
 def _bisect(f, target: float, lo: float, hi: float, tol: float = 0.01, max_iter: int = 60) -> Optional[float]:
+    """Find price P in [lo, hi] with f(P) == target. f is assumed
+    monotonic non-decreasing over [lo, hi] (true here except at the very
+    extremes, where ATR-driven "any big move reads as fear" can flatten it).
+
+    If `target` isn't actually reachable within [lo, hi] — e.g. a fixed
+    factor (Volume/VIX) or the ATR ceiling caps how far HFGI can move by
+    price alone — this returns the boundary (lo or hi) closest to it
+    instead of None/NaN, since "the most extreme price in a very wide,
+    already-generous range" is still a usable answer, just not an exact
+    root. Returns None only when f itself can't be evaluated (NaN inputs,
+    e.g. insufficient history) — a fundamentally different failure than
+    "reachable in principle, just not within this range."
+    """
     f_lo, f_hi = f(lo), f(hi)
     if any(pd.isna(v) for v in (f_lo, f_hi)):
         return None
     if f_lo > f_hi:
         lo, hi, f_lo, f_hi = hi, lo, f_hi, f_lo
-    if not (f_lo - 1e-6 <= target <= f_hi + 1e-6):
-        return None
+    if target <= f_lo:
+        return lo
+    if target >= f_hi:
+        return hi
     for _ in range(max_iter):
         mid = (lo + hi) / 2
         f_mid = f(mid)
@@ -158,8 +173,15 @@ def estimate_price_targets(
     """For each HFGI_Smoothed level in `thresholds` (add-on/exit decisions
     trigger off the smoothed series, see backtest.run_backtest), estimate
     today's closing price that would produce it. Holds non-price-derived
-    sub-scores fixed at their latest actual values. Returns
-    {threshold: price_or_None}.
+    sub-scores fixed at their latest actual values (pass `weights` without
+    a factor's key to exclude it from the solve entirely instead).
+
+    Always returns a numeric price per threshold — never NaN/None — except
+    when there isn't enough history to evaluate the model at all (e.g. a
+    newly-listed ticker like SKHY). A threshold outside what's achievable
+    within the (already wide, 0.05x-3x) search range still returns the
+    closest boundary price reached rather than giving up; see `_bisect`.
+    Returns {threshold: price}.
     """
     engine = engine or HFGIEngine()
     weights = weights or engine.weights

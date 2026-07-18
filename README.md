@@ -210,12 +210,19 @@ lands the smoothed value on the target.
 
 This is an estimate, not a guarantee — it assumes the hypothetical day's
 High/Low collapse to its Close, and holds Volume/VIX fixed even though a
-real move that size would likely shift those too. It's also honest about
-being sometimes *unreachable*: a large single-day move raises ATR (and
-thus reads as more "fear," pulling the score back down) regardless of
-direction, so above some magnitude further price movement stops helping,
-and holding Volume/VIX fixed adds its own floor/ceiling on top of that —
-a tier can show "無法僅靠價格達成" (not achievable by price alone).
+real move that size would likely shift those too.
+
+`estimate_price_targets(...)` always returns a number per threshold —
+never NaN/None — with one exception: a ticker with too little history to
+evaluate the model at all (e.g. `SKHY`'s ~6 rows). A large single-day
+move raises ATR (and thus reads as more "fear," pulling the score back
+down) regardless of direction, and holding Volume/VIX fixed adds its own
+floor/ceiling on top of that, so a tier's exact HFGI target can sit
+outside what's reachable within the (already wide, 0.05x-3x) search
+range; rather than giving up with `None`, `_bisect` returns the closest
+boundary price in that range, and `run.py` labels it "外插估計,已達搜尋
+範圍邊界" (extrapolated, hit the search-range boundary) so it's clearly
+distinguishable from an exact solve.
 
 `estimate_price_targets(..., weights=...)` accepts a weights override, so
 you can drop a normally-fixed factor from the solve entirely instead of
@@ -223,9 +230,9 @@ holding it at today's value — answering "what price would it take if we
 don't require volume/VIX to move too." `run.py --exclude-price-target-factors
 market_volatility,volume` does this for every ticker (only for the
 price-target solve; the live HFGI/backtest keep the full weights). This
-generally makes more tiers reachable, since the fixed contribution from
-those factors — which imposes its own floor/ceiling regardless of price —
-is removed rather than pinned at whatever it happens to be today.
+generally moves a tier's target price closer to (or within) the exact
+range, since the fixed contribution from those factors is removed rather
+than pinned at whatever it happens to be today.
 
 ## Task 5 — Dashboard (`dashboard.py`)
 

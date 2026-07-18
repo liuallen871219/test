@@ -95,23 +95,23 @@ def main() -> None:
         price_targets = estimate_price_targets(price_data, subject, all_thresholds, engine=engine, weights=target_weights)
         last_close = float(hfgi_df["Close"].dropna().iloc[-1]) if hfgi_df["Close"].notna().any() else None
 
-        still_fixed = [f for f in ("volume", "market_volatility") if f not in excluded_factors]
-        unreachable_msg = (
-            f"無法僅靠價格達成(需搭配{'/'.join(still_fixed)}變化)" if still_fixed
-            else "無法僅靠價格達成(即使排除成交量/VIX,單日價格波動幅度仍不足)"
-        )
+        def format_target(price):
+            # estimate_price_targets always returns a number (extrapolating to
+            # the search-range boundary rather than giving up) except when
+            # there's not enough history to evaluate the model at all.
+            if price is None or last_close is None:
+                return "歷史資料不足,無法估計", "N/A"
+            pct = f"{(price / last_close - 1) * 100:+.1f}%"
+            note = " (外插估計,已達搜尋範圍邊界)" if price <= last_close * 0.051 or price >= last_close * 2.99 else ""
+            return f"{price:.2f}{note}", pct
 
         print(f"{subject} 加倉/出場目標價格 (現價 {last_close}):")
         for strategy_name, tiers in config.ADD_ON_STRATEGIES.items():
             print(f"  [{strategy_name}]")
             for tier in tiers:
-                price = price_targets.get(tier["threshold"])
-                pct = f"{(price / last_close - 1) * 100:+.1f}%" if price and last_close else "N/A"
-                price_str = f"{price:.2f}" if price else unreachable_msg
+                price_str, pct = format_target(price_targets.get(tier["threshold"]))
                 print(f"    HFGI<{tier['threshold']} 加碼{tier['fraction'] * 100:.0f}% -> 目標價 {price_str} ({pct})")
-        exit_price = price_targets.get(config.BACKTEST_SELL_THRESHOLD)
-        exit_pct = f"{(exit_price / last_close - 1) * 100:+.1f}%" if exit_price and last_close else "N/A"
-        exit_str = f"{exit_price:.2f}" if exit_price else unreachable_msg
+        exit_str, exit_pct = format_target(price_targets.get(config.BACKTEST_SELL_THRESHOLD))
         print(f"    HFGI>{config.BACKTEST_SELL_THRESHOLD} 全數出場 -> 目標價 {exit_str} ({exit_pct})")
 
         all_summaries[subject] = {
