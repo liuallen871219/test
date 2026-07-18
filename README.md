@@ -7,9 +7,13 @@ a watchlist of other memory/semiconductor-adjacent tickers: `DRAM`
 (Nvidia), `TSM` (Taiwan Semiconductor), `ASML` (ASML Holding), `PLTR`
 (Palantir), `MRVL` (Marvell), `GLW` (Corning), `LITE` (Lumentum), `COHR`
 (Coherent), `AAOI` (Applied Optoelectronics) — and `SMH`/`SOXX`
-themselves, which double as both the sector benchmark used for every
-other ticker's Relative Strength factor *and* a watchlist subject in
-their own right, i.e. a sector-wide semiconductor fear/greed reading.
+themselves, which double as both a Relative Strength benchmark and a
+watchlist subject in their own right, i.e. a sector-wide semiconductor
+fear/greed reading. `config.SECTOR_BENCHMARK_TICKERS` (`SMH`, `SOXX`,
+`QQQ`, `VOO`) is the full Relative Strength benchmark blend — sector ETFs
+plus broad-market ones, so the factor reflects both "vs. the semis
+sector" and "vs. the overall market"; a subject that's also in that list
+excludes itself from its own benchmark (see Task 3).
 
 ## Setup
 
@@ -100,12 +104,24 @@ VIX data, no longer blanks out the whole composite).
 
 `HFGIEngine.compute(price_data, subject=...)` computes the index for any
 one ticker in `price_data` (defaults to `config.PRIMARY_TICKER`), always
-using `config.SECTOR_BENCHMARK_TICKERS` (SMH/SOXX) for Relative Strength.
+using `config.SECTOR_BENCHMARK_TICKERS` (`SMH`/`SOXX`/`QQQ`/`VOO`) for
+Relative Strength — excluding `subject` itself from that blend if it's
+also one of those four (otherwise, e.g., `SOXX`'s Relative Strength would
+partly be measured against its own momentum, diluting the signal instead
+of reflecting genuine relative performance).
 `compute_subscores(price_data, subject)` does the expensive rolling-
 percentile work and returns it separately from any particular weighting
 (`combine_scores(scores, weights)` applies weights afterward) — this is
 what lets `calibrate_weights.py` try hundreds of weight vectors without
 recomputing indicators for each one.
+
+**HFGI_Smoothed**: a real SOXX drawdown (peak 2026-06-22, -20% by
+2026-07-17) showed raw daily `HFGI` whipsawing back above the buy
+threshold several times during the decline before the actual
+capitulation. `HFGI_Smoothed` (`config.HFGI_SMOOTHING_WINDOW`-day simple
+moving average of `HFGI`, default 3 days) is what add-on/exit decisions
+actually trigger off (see Task 4) — `HFGI` itself is kept as the raw,
+undelayed daily reading for display.
 
 ### Weight calibration (`calibrate_weights.py`)
 
@@ -139,7 +155,9 @@ across re-runs with different seeds than by any single run's #1.
 Contrarian strategy, but scaling in rather than going all-in the moment
 `HFGI` first crosses below 30: three tiers at `HFGI < 30 / 20 / 10`, each
 adding a fraction of a full position (at most one tier fires per day),
-then a full exit once `HFGI > 70`. Two opposite sizing philosophies, both
+then a full exit once `HFGI > 70`. Decisions use `HFGI_Smoothed`, not raw
+`HFGI` (falls back to `HFGI` if a hand-built table has no `HFGI_Smoothed`
+column) — see Task 3. Two opposite sizing philosophies, both
 in `config.ADD_ON_STRATEGIES`:
 
 - **`pyramid`** (金字塔): 50% / 30% / 20% — biggest tranche at the first,
@@ -185,7 +203,10 @@ closing price would do to the price-derived ones (Price Momentum, RSI,
 MACD, ATR, Drawdown, Relative Strength, and ADR Premium for `SKHY`) via
 the same one-step EWM/rolling update the live indicators use, and
 bisection-searches for the price where the resulting HFGI matches each
-tier threshold.
+tier threshold — accounting for `HFGI_Smoothed`'s moving average (since
+that's what actually triggers a tier), by solving for the *raw* HFGI that,
+averaged with the already-known prior `HFGI_SMOOTHING_WINDOW - 1` days,
+lands the smoothed value on the target.
 
 This is an estimate, not a guarantee — it assumes the hypothetical day's
 High/Low collapse to its Close, and holds Volume/Relative

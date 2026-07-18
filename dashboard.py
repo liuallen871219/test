@@ -66,11 +66,13 @@ def main() -> None:
     has_adr = subject == config.PRIMARY_TICKER and hfgi_df["ADR_Premium_Raw"].notna().any()
 
     latest = hfgi_df.dropna(subset=["HFGI"]).iloc[-1] if hfgi_df["HFGI"].notna().any() else None
-    col1, col2, col3, col4, col5 = st.columns(5)
+    col1, col1b, col2, col3, col4, col5 = st.columns(6)
     if latest is not None:
-        col1.metric("最新 HFGI", f"{latest['HFGI']:.1f}", latest["State"])
+        col1.metric("最新 HFGI(原始)", f"{latest['HFGI']:.1f}", latest["State"])
+        col1b.metric("HFGI(平滑,決策用)", f"{latest['HFGI_Smoothed']:.1f}")
     else:
-        col1.metric("最新 HFGI", "N/A", "歷史資料不足")
+        col1.metric("最新 HFGI(原始)", "N/A", "歷史資料不足")
+        col1b.metric("HFGI(平滑,決策用)", "N/A")
     col2.metric("收盤價", f"{ind['Close'].iloc[-1]:.2f}")
     col3.metric("RSI(14)", f"{ind['RSI'].iloc[-1]:.1f}" if pd.notna(ind["RSI"].iloc[-1]) else "N/A")
     if has_adr:
@@ -89,12 +91,19 @@ def main() -> None:
 
     # --- HFGI curve -------------------------------------------------------
     fig_hfgi = go.Figure()
-    fig_hfgi.add_trace(go.Scatter(x=hfgi_df.index, y=hfgi_df["HFGI"], name="HFGI", line=dict(color="orange")))
+    fig_hfgi.add_trace(go.Scatter(
+        x=hfgi_df.index, y=hfgi_df["HFGI"], name="HFGI(原始)",
+        line=dict(color="orange", width=1), opacity=0.5,
+    ))
+    fig_hfgi.add_trace(go.Scatter(
+        x=hfgi_df.index, y=hfgi_df["HFGI_Smoothed"], name=f"HFGI(平滑,{config.HFGI_SMOOTHING_WINDOW}日,決策用)",
+        line=dict(color="orangered", width=2.5),
+    ))
     fig_hfgi.add_hline(y=config.BACKTEST_BUY_THRESHOLD, line_dash="dash", line_color="green",
                         annotation_text=f"Buy (<{config.BACKTEST_BUY_THRESHOLD})")
     fig_hfgi.add_hline(y=config.BACKTEST_SELL_THRESHOLD, line_dash="dash", line_color="red",
                         annotation_text=f"Sell (>{config.BACKTEST_SELL_THRESHOLD})")
-    fig_hfgi.update_layout(title=f"{subject} — HFGI 曲線", yaxis_range=[0, 100], height=350)
+    fig_hfgi.update_layout(title=f"{subject} — HFGI 曲線(粗線=決策用平滑值)", yaxis_range=[0, 100], height=350)
     st.plotly_chart(fig_hfgi, use_container_width=True)
 
     # --- Price chart with add-on entries / exits --------------------------

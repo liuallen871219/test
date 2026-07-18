@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 
 from hfgi_pro import config
-from hfgi_pro.engine import HFGIEngine, combine_scores
+from hfgi_pro.engine import HFGIEngine
 from hfgi_pro.price_target import estimate_price_targets
 
 
@@ -38,15 +38,15 @@ def _fake_price_data(n=400):
 def test_price_target_at_current_close_reproduces_actual_hfgi():
     price_data = _fake_price_data()
     engine = HFGIEngine()
-    ind, scores, _extras = engine.compute_subscores(price_data, subject=config.PRIMARY_TICKER)
-    actual_hfgi = combine_scores(scores, engine.weights).iloc[-1]
+    hfgi_df = engine.compute(price_data, subject=config.PRIMARY_TICKER)
+    actual_smoothed_hfgi = hfgi_df["HFGI_Smoothed"].iloc[-1]
 
-    # Solving for the actual current HFGI level should land right back on
-    # (approximately) today's real closing price.
-    targets = estimate_price_targets(price_data, config.PRIMARY_TICKER, [actual_hfgi], engine=engine)
-    price = targets[actual_hfgi]
+    # Solving for the actual current HFGI_Smoothed level should land right
+    # back on (approximately) today's real closing price.
+    targets = estimate_price_targets(price_data, config.PRIMARY_TICKER, [actual_smoothed_hfgi], engine=engine)
+    price = targets[actual_smoothed_hfgi]
     assert price is not None
-    assert np.isclose(price, ind["Close"].iloc[-1], rtol=0.02)
+    assert np.isclose(price, hfgi_df["Close"].iloc[-1], rtol=0.02)
 
 
 def test_price_target_for_lower_hfgi_is_a_lower_price():

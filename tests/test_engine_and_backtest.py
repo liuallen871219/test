@@ -196,3 +196,25 @@ def test_backtest_recommendation_reflects_current_state():
     ready_to_exit["Close"] = [100.0, 101.0, 102.0]
     result = run_backtest(ready_to_exit, tiers=tiers)
     assert result.recommendation["action"] == "exit"
+
+
+def test_backtest_uses_smoothed_hfgi_when_available_to_avoid_whipsaw():
+    """A single noisy day crossing a tier threshold shouldn't trigger a fill
+    if HFGI_Smoothed (what a real SOXX drawdown showed whipsawing back above
+    the buy threshold several times before its actual capitulation) stays on
+    the other side of it."""
+    index = pd.bdate_range("2021-01-04", periods=4)
+    tiers = config.ADD_ON_STRATEGIES["pyramid"]
+    close = pd.Series([100.0, 100.0, 100.0, 100.0], index=index)
+
+    # Raw HFGI dips below 30 on day 2 (noise) but the smoothed series never does.
+    raw_only = pd.DataFrame({"HFGI": [50.0, 25.0, 50.0, 50.0], "Close": close}, index=index)
+    result_raw = run_backtest(raw_only, tiers=tiers)
+    assert result_raw.tranche_count.iloc[1] == 1  # fires on the noisy raw dip
+
+    smoothed = pd.DataFrame(
+        {"HFGI": [50.0, 25.0, 50.0, 50.0], "HFGI_Smoothed": [50.0, 45.0, 42.0, 40.0], "Close": close},
+        index=index,
+    )
+    result_smoothed = run_backtest(smoothed, tiers=tiers)
+    assert (result_smoothed.tranche_count == 0).all()  # smoothed series never breaches 30

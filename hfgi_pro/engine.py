@@ -203,6 +203,10 @@ class HFGIEngine:
         result = pd.DataFrame(index=ind.index)
         result["HFGI"] = hfgi
         result["State"] = result["HFGI"].apply(_classify_state)
+        # Add-on/exit decisions (see backtest.run_backtest) trigger off this
+        # smoothed series rather than raw daily HFGI, so a single noisy day
+        # crossing a threshold doesn't fire a tier fill or exit on its own.
+        result["HFGI_Smoothed"] = hfgi.rolling(config.HFGI_SMOOTHING_WINDOW, min_periods=1).mean()
         result = result.join(scores)
         result["Close"] = ind["Close"]
         result["ADR_Premium_Raw"] = extras["adr_premium_raw"]

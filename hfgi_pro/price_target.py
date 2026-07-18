@@ -153,13 +153,17 @@ def estimate_price_targets(
     thresholds: List[float],
     engine: HFGIEngine = None,
     weights: Dict[str, float] = None,
+    smoothing_window: int = None,
 ) -> Dict[float, Optional[float]]:
-    """For each HFGI level in `thresholds`, estimate today's closing price
-    that would produce it (holding non-price-derived sub-scores fixed at
-    their latest actual values). Returns {threshold: price_or_None}.
+    """For each HFGI_Smoothed level in `thresholds` (add-on/exit decisions
+    trigger off the smoothed series, see backtest.run_backtest), estimate
+    today's closing price that would produce it. Holds non-price-derived
+    sub-scores fixed at their latest actual values. Returns
+    {threshold: price_or_None}.
     """
     engine = engine or HFGIEngine()
     weights = weights or engine.weights
+    smoothing_window = smoothing_window if smoothing_window is not None else config.HFGI_SMOOTHING_WINDOW
     ind, scores, extras = engine.compute_subscores(price_data, subject=subject)
 
     min_history = max(engine.momentum_window, config.RSI_WINDOW, config.MACD_SLOW, config.ATR_WINDOW) + 1
@@ -170,4 +174,17 @@ def estimate_price_targets(
     last_close = float(ind["Close"].iloc[-1])
     lo, hi = last_close * 0.05, last_close * 3.0
 
-    return {t: _bisect(hfgi_fn, t, lo, hi) for t in thresholds}
+    # HFGI_Smoothed is a simple moving average over `smoothing_window` days
+    # including today. Today's raw HFGI is the only unknown (the prior
+    # smoothing_window-1 days already happened), so solving for
+    # smoothed(P) == threshold is equivalent to solving
+    # raw_hfgi(P) == threshold * window - sum(prior raw HFGI values).
+    prior_raw_hfgi = combine_scores(scores, weights).iloc[-smoothing_window:-1]
+    if len(prior_raw_hfgi) < smoothing_window - 1 or prior_raw_hfgi.isna().any():
+        return {t: None for t in thresholds}
+    prior_sum = float(prior_raw_hfgi.sum())
+
+    def raw_target_for_smoothed(threshold: float) -> float:
+        return threshold * smoothing_window - prior_sum
+
+    return {t: _bisect(hfgi_fn, raw_target_for_smoothed(t), lo, hi) for t in thresholds}

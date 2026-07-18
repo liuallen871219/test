@@ -192,12 +192,17 @@ def run_backtest(
     transaction_cost_bps: float = config.BACKTEST_TRANSACTION_COST_BPS,
 ) -> BacktestResult:
     tiers = tiers or config.ADD_ON_STRATEGIES[config.DEFAULT_ADD_ON_STRATEGY]
-    df = hfgi_df.dropna(subset=["HFGI", "Close"]).copy()
+    # Add-on/exit decisions trigger off the smoothed HFGI series when it's
+    # available (a real SOXX drawdown showed raw daily HFGI whipsawing back
+    # above the buy threshold several times before the actual capitulation);
+    # ad-hoc HFGI tables built without HFGI_Smoothed fall back to raw HFGI.
+    decision_col = "HFGI_Smoothed" if "HFGI_Smoothed" in hfgi_df.columns else "HFGI"
+    df = hfgi_df.dropna(subset=[decision_col, "Close"]).copy()
 
     if df.empty:
         return _empty_result()
 
-    position, tranche_count = _build_positions(df["HFGI"], tiers, sell_threshold)
+    position, tranche_count = _build_positions(df[decision_col], tiers, sell_threshold)
     daily_return = df["Close"].pct_change().fillna(0)
     strategy_return = position.shift(1).fillna(0) * daily_return
 
@@ -230,7 +235,7 @@ def run_backtest(
     # own fill, not tranche_count's already-acted-on end-of-day value (which
     # would describe today's signal as already handled instead of actionable).
     prior_tranche_count = int(tranche_count.iloc[-2]) if len(tranche_count) >= 2 else 0
-    recommendation = _recommend_action(df["HFGI"].iloc[-1], prior_tranche_count, tiers, sell_threshold)
+    recommendation = _recommend_action(df[decision_col].iloc[-1], prior_tranche_count, tiers, sell_threshold)
 
     return BacktestResult(
         equity_curve=equity_curve,

@@ -4,12 +4,17 @@ from pathlib import Path
 
 # --- Universe -----------------------------------------------------------
 # SKHY / 000660.KS are the two listings of the primary subject (SK Hynix).
-# SMH / SOXX are semiconductor-sector benchmarks used for relative strength.
+# SMH / SOXX are semiconductor-sector benchmarks; QQQ / VOO add broad-market
+# context (Nasdaq-100, S&P 500) so Relative Strength isn't purely
+# sector-relative — a stock can lag its sector while still beating the
+# broad market, or vice versa. All four are used for every subject's
+# Relative Strength (a subject that's also one of these four excludes
+# itself from its own benchmark blend, see engine._relative_strength_raw).
 # ^VIX is a macro overlay: elevated market-wide volatility reads as fear
 # regardless of the subject's own price action (see market_volatility below).
 PRIMARY_TICKER = "SKHY"
 ADR_REFERENCE_TICKER = "000660.KS"
-SECTOR_BENCHMARK_TICKERS = ["SMH", "SOXX"]
+SECTOR_BENCHMARK_TICKERS = ["SMH", "SOXX", "QQQ", "VOO"]
 MARKET_VOLATILITY_TICKER = "^VIX"
 
 # Additional subjects to run the HFGI engine on individually (each gets its
@@ -84,6 +89,14 @@ HFGI_WEIGHTS = {
 # Rolling lookback window (trading days) used to percentile-rank raw
 # indicator values into 0-100 sub-scores.
 ROLLING_WINDOW = 252
+
+# Simple moving average window applied to daily HFGI to get HFGI_Smoothed.
+# A real SOXX drawdown (2026-06-22 to 2026-07-17) showed raw daily HFGI
+# whipsawing back above the buy threshold several times during the decline
+# before the real capitulation — add-on/exit decisions use the smoothed
+# series (see backtest.run_backtest) so a single noisy day doesn't trigger
+# a tier fill or exit on its own.
+HFGI_SMOOTHING_WINDOW = 3
 
 STATE_THRESHOLDS = {
     "Extreme Fear": (0, 30),
