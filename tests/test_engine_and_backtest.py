@@ -31,6 +31,7 @@ def _fake_price_data(n=400):
         config.ADR_REFERENCE_TICKER: _fake_ohlcv(n, seed=2, index=index),
         "SMH": _fake_ohlcv(n, seed=3, index=index),
         "SOXX": _fake_ohlcv(n, seed=4, index=index),
+        config.MARKET_VOLATILITY_TICKER: _fake_ohlcv(n, seed=5, start_price=20.0, index=index),
     }
 
 
@@ -43,13 +44,15 @@ def test_engine_output_has_expected_columns_and_bounded_hfgi():
         "HFGI", "State",
         "PriceMomentum_Score", "RSI_Score", "MACD_Score", "Volume_Score",
         "ATR_Score", "RelativeStrength_Score", "Drawdown_Score", "ADRPremium_Score",
-        "Close", "ADR_Premium_Raw", "RelativeStrength_Raw",
+        "MarketVolatility_Score", "Close", "ADR_Premium_Raw", "RelativeStrength_Raw",
+        "VIX_Close",
     }
     assert expected_cols.issubset(result.columns)
 
     hfgi = result["HFGI"].dropna()
     assert (hfgi >= 0).all() and (hfgi <= 100).all()
     assert result["State"].dropna().isin(list(config.STATE_THRESHOLDS.keys()) + ["Unknown"]).all()
+    assert result["MarketVolatility_Score"].dropna().between(0, 100).all()
 
 
 def test_engine_hfgi_survives_missing_reference_ticker():
@@ -62,6 +65,20 @@ def test_engine_hfgi_survives_missing_reference_ticker():
     result = engine.compute(price_data)
 
     assert result["ADRPremium_Score"].isna().all()
+    hfgi = result["HFGI"].dropna()
+    assert len(hfgi) > 0
+    assert (hfgi >= 0).all() and (hfgi <= 100).all()
+
+
+def test_engine_hfgi_survives_missing_vix():
+    """No ^VIX ticker supplied should degrade gracefully, same as ADR Premium."""
+    price_data = _fake_price_data()
+    del price_data[config.MARKET_VOLATILITY_TICKER]
+
+    engine = HFGIEngine()
+    result = engine.compute(price_data)
+
+    assert result["MarketVolatility_Score"].isna().all()
     hfgi = result["HFGI"].dropna()
     assert len(hfgi) > 0
     assert (hfgi >= 0).all() and (hfgi <= 100).all()

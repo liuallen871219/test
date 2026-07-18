@@ -5,8 +5,8 @@ from pathlib import Path
 # --- Universe -----------------------------------------------------------
 # SKHY / 000660.KS are the two listings of the primary subject (SK Hynix).
 # SMH / SOXX are semiconductor-sector benchmarks used for relative strength.
-# ^VIX is downloaded/cached for future macro-overlay use but is not yet
-# wired into the HFGI formula below.
+# ^VIX is a macro overlay: elevated market-wide volatility reads as fear
+# regardless of the subject's own price action (see market_volatility below).
 PRIMARY_TICKER = "SKHY"
 ADR_REFERENCE_TICKER = "000660.KS"
 SECTOR_BENCHMARK_TICKERS = ["SMH", "SOXX"]
@@ -49,6 +49,11 @@ HFGI_WEIGHTS = {
     "relative_strength": 10,
     "drawdown": 10,
     "adr_premium": 15,
+    # Macro overlay (added beyond the original spec): market-wide VIX
+    # percentile, inverted (high VIX -> low score) same as ATR. Weighted
+    # comparably to the other secondary factors so idiosyncratic,
+    # asset-specific momentum still dominates the composite.
+    "market_volatility": 15,
 }
 
 # Rolling lookback window (trading days) used to percentile-rank raw

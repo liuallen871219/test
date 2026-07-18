@@ -97,6 +97,12 @@ class HFGIEngine:
         ref_cum_return = ref_close / ref_base - 1.0
         return primary_cum_return - ref_cum_return
 
+    def _vix_close(self, ind: pd.DataFrame, price_data: Dict[str, pd.DataFrame]) -> pd.Series:
+        vix_ticker = config.MARKET_VOLATILITY_TICKER
+        if vix_ticker not in price_data:
+            return pd.Series(index=ind.index, dtype=float)
+        return price_data[vix_ticker]["Close"].reindex(ind.index).ffill()
+
     def compute(self, price_data: Dict[str, pd.DataFrame], subject: str = None) -> pd.DataFrame:
         """Compute the full HFGI table for `subject`: Date (index), HFGI,
         State, and each weighted sub-score. Defaults to config.PRIMARY_TICKER.
@@ -106,6 +112,7 @@ class HFGIEngine:
 
         relative_strength_raw = self._relative_strength_raw(ind, price_data)
         adr_premium_raw = self._adr_premium_raw(ind, price_data, subject)
+        vix_close = self._vix_close(ind, price_data)
 
         scores = pd.DataFrame(index=ind.index)
         scores["PriceMomentum_Score"] = _percentile_score(ind["ROC"], self.rolling_window)
@@ -117,6 +124,8 @@ class HFGIEngine:
         scores["RelativeStrength_Score"] = _percentile_score(relative_strength_raw, self.rolling_window)
         scores["Drawdown_Score"] = _percentile_score(ind["Drawdown"], self.rolling_window)
         scores["ADRPremium_Score"] = _percentile_score(adr_premium_raw, self.rolling_window)
+        # High VIX (market-wide fear) reads as fear, so invert the rank too.
+        scores["MarketVolatility_Score"] = 100 - _percentile_score(vix_close, self.rolling_window)
 
         weight_map = {
             "PriceMomentum_Score": self.weights["price_momentum"],
@@ -127,6 +136,7 @@ class HFGIEngine:
             "RelativeStrength_Score": self.weights["relative_strength"],
             "Drawdown_Score": self.weights["drawdown"],
             "ADRPremium_Score": self.weights["adr_premium"],
+            "MarketVolatility_Score": self.weights["market_volatility"],
         }
         # Weighted average that ignores any sub-score missing for a given row
         # (e.g. no ADR reference ticker was supplied), rather than letting a
@@ -143,4 +153,5 @@ class HFGIEngine:
         result["Close"] = ind["Close"]
         result["ADR_Premium_Raw"] = adr_premium_raw
         result["RelativeStrength_Raw"] = relative_strength_raw
+        result["VIX_Close"] = vix_close
         return result

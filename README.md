@@ -47,23 +47,33 @@ RSI(14), MACD, ATR, SMA(20/50/125), Drawdown, and Volume Ratio.
 ```
 HFGI = 20% Price Momentum + 15% RSI + 15% MACD + 15% Volume
      + 10% ATR + 10% Relative Strength + 10% Drawdown + 15% ADR Premium
+     + 15% Market Volatility (VIX)   [added beyond the original spec]
 ```
 
 Each raw indicator is turned into a 0-100 "sub-score" via a rolling
 252-day percentile rank (RSI is already 0-100 and used directly; ATR is
 inverted since higher volatility reads as fear). The weights above sum to
-110, so the engine divides by the actual weight total to keep the final
+125, so the engine divides by the actual weight total to keep the final
 `HFGI` on a 0-100 scale. Output columns: `HFGI`, `State`, and each
 `*_Score` column.
+
+**Market Volatility (VIX) overlay**: the original 8-factor spec only looks
+at each subject's own price action, so it has no way to distinguish
+"this specific stock is being sold off" from "the whole market is
+risk-off" — a systemic sell-off reads identically to idiosyncratic
+weakness. `MarketVolatility_Score` is `^VIX`'s rolling percentile rank,
+inverted (elevated VIX -> low score), applied identically to every
+watchlist subject. If `^VIX` data isn't available it's simply omitted,
+same graceful degradation as ADR Premium below.
 
 **Note on ADR Premium**: no FX-rate ticker was available, so `ADR Premium`
 is approximated as the cumulative-return spread between SKHY and
 000660.KS rather than an FX-adjusted price premium. It only applies to
 `SKHY` itself — for the other watchlist tickers (`DRAM`, `QQQ`, `ALAB`,
 which have no ADR pair) it's simply omitted; the NaN-tolerant weighted
-average below re-normalizes over whichever sub-scores are available.
-`^VIX` is downloaded and cached for future macro-overlay use but isn't yet
-part of the formula.
+average re-normalizes over whichever sub-scores are available for a
+given row (so a single missing sub-score, e.g. no ADR reference or no
+VIX data, no longer blanks out the whole composite).
 
 `HFGIEngine.compute(price_data, subject=...)` computes the index for any
 one ticker in `price_data` (defaults to `config.PRIMARY_TICKER`), always
@@ -81,8 +91,8 @@ streamlit run dashboard.py
 ```
 
 A dropdown lets you pick any ticker in `config.WATCHLIST`. Shows the HFGI
-curve, price with SMAs and Buy/Sell markers, RSI, MACD, volume, and (for
-`SKHY` only) the ADR Premium proxy.
+curve, price with SMAs and Buy/Sell markers, RSI, MACD, volume, the VIX
+overlay, and (for `SKHY` only) the ADR Premium proxy.
 
 ## Tests
 

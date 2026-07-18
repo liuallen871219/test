@@ -44,7 +44,7 @@ def main() -> None:
     has_adr = subject == config.PRIMARY_TICKER and hfgi_df["ADR_Premium_Raw"].notna().any()
 
     latest = hfgi_df.dropna(subset=["HFGI"]).iloc[-1] if hfgi_df["HFGI"].notna().any() else None
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5 = st.columns(5)
     if latest is not None:
         col1.metric("最新 HFGI", f"{latest['HFGI']:.1f}", latest["State"])
     else:
@@ -55,6 +55,8 @@ def main() -> None:
         col4.metric("ADR Premium (proxy)", f"{hfgi_df['ADR_Premium_Raw'].iloc[-1] * 100:.2f}%")
     else:
         col4.metric("ADR Premium (proxy)", "N/A", "僅 SKHY 適用")
+    latest_vix = hfgi_df["VIX_Close"].iloc[-1]
+    col5.metric("VIX", f"{latest_vix:.1f}" if pd.notna(latest_vix) else "N/A")
 
     summary = result.summary()
     s1, s2, s3, s4 = st.columns(4)
@@ -90,9 +92,12 @@ def main() -> None:
     fig_price.update_layout(title=f"{subject} — 股價 & Buy/Sell 訊號", height=400)
     st.plotly_chart(fig_price, use_container_width=True)
 
-    # --- RSI / MACD / Volume / ADR Premium in a 2x2 grid -------------------
+    # --- RSI / MACD / Volume / VIX / ADR Premium in a 2x3 grid --------------
     adr_title = "ADR Premium (proxy)" if has_adr else "ADR Premium (僅 SKHY 適用)"
-    fig = make_subplots(rows=2, cols=2, subplot_titles=("RSI(14)", "MACD", "成交量", adr_title))
+    fig = make_subplots(
+        rows=2, cols=3,
+        subplot_titles=("RSI(14)", "MACD", "成交量", "VIX(市場恐慌總體指標)", adr_title, ""),
+    )
 
     fig.add_trace(go.Scatter(x=ind.index, y=ind["RSI"], name="RSI"), row=1, col=1)
     fig.add_hline(y=70, line_dash="dot", line_color="red", row=1, col=1)
@@ -102,7 +107,10 @@ def main() -> None:
     fig.add_trace(go.Scatter(x=ind.index, y=ind["MACD_Signal"], name="Signal"), row=1, col=2)
     fig.add_trace(go.Bar(x=ind.index, y=ind["MACD_Hist"], name="Histogram"), row=1, col=2)
 
-    fig.add_trace(go.Bar(x=ind.index, y=ind["Volume"], name="Volume"), row=2, col=1)
+    fig.add_trace(go.Bar(x=ind.index, y=ind["Volume"], name="Volume"), row=1, col=3)
+
+    if hfgi_df["VIX_Close"].notna().any():
+        fig.add_trace(go.Scatter(x=hfgi_df.index, y=hfgi_df["VIX_Close"], name="VIX"), row=2, col=1)
 
     if has_adr:
         fig.add_trace(
