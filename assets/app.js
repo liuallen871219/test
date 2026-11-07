@@ -237,12 +237,12 @@
 
   function buildSidebar() {
     const nav = $('#mod-nav');
-    nav.innerHTML = '<a class="nav-home" href="#/">課程首頁</a>' + PHASES.map(([name, ids]) =>
+    nav.innerHTML = '<a class="nav-home" href="#home">課程首頁</a>' + PHASES.map(([name, ids]) =>
       '<div class="nav-phase">' + name + '</div>' + ids.filter(id => byId[id]).map(id => {
         const m = byId[id];
-        return '<a class="nav-mod" href="#/' + m.id + '" data-mod="' + m.id + '"><span class="nav-num">' + m.num +
+        return '<a class="nav-mod" href="#' + m.id + '" data-mod="' + m.id + '"><span class="nav-num">' + m.num +
           '</span><span class="nav-title">' + m.title + '<small>' + m.zh + '</small></span><span class="nav-bar"><i></i></span></a>';
-      }).join('')).join('') + '<a class="nav-finish" href="#/finish" data-mod="finish">學習報告與結業證書</a>';
+      }).join('')).join('') + '<a class="nav-finish" href="#finish" data-mod="finish">學習報告與結業證書</a>';
   }
 
   function updateSidebar(active) {
@@ -260,10 +260,10 @@
   function nextTarget() {
     for (const m of modules) {
       const l = m.lessons.find(x => !lessonDone(x));
-      if (l) return '#/' + m.id + '/learn/' + l.id;
-      if (!quizPassed(m)) return '#/' + m.id + '/quiz';
+      if (l) return '#' + m.id + '-learn-' + l.id;
+      if (!quizPassed(m)) return '#' + m.id + '-quiz';
     }
-    return '#/finish';
+    return '#finish';
   }
 
   /* ---------- 首頁 ---------- */
@@ -274,7 +274,7 @@
       '<section class="hero"><p class="eyebrow">API Engineering Roadmap</p><h1>從 HTTP 到 AI-Powered API<br>的後端工程師養成課程</h1>' +
       '<p class="lead">16 個模組、' + st.lessons + ' 節課、' + st.labs + ' 個互動實驗、' + st.qs + ' 題測驗。每一節都有概念、圖表、Python 範例與面試題，最後用 6 個真實專案把所學串起來。</p>' +
       '<div class="hero-cta"><a class="btn primary lg" href="' + nextTarget() + '">' + (st.done ? '繼續學習' : '開始第一課') + ' →</a>' +
-      '<a class="btn lg" href="#/m16">先看實戰專案</a></div>' +
+      '<a class="btn lg" href="#m16">先看實戰專案</a></div>' +
       '<div class="stat-row"><div class="stat"><b>' + Math.round(st.pct * 100) + '%</b><span>總進度</span></div>' +
       '<div class="stat"><b>' + st.done + ' / ' + st.lessons + '</b><span>已完成節數</span></div>' +
       '<div class="stat"><b>' + st.passed + ' / ' + st.quizzes + '</b><span>通過測驗</span></div></div></section>' +
@@ -287,7 +287,7 @@
       '<section class="roadmap"><h2>課程地圖</h2>' + PHASES.map(([name, ids]) =>
         '<div class="phase"><h3>' + name + '</h3><div class="mod-grid">' + ids.filter(id => byId[id]).map(id => {
           const m = byId[id], s = modStats(m);
-          return '<a class="mod-card' + (s.complete ? ' complete' : '') + '" href="#/' + m.id + '"><span class="mc-num">' + m.num + '</span>' +
+          return '<a class="mod-card' + (s.complete ? ' complete' : '') + '" href="#' + m.id + '"><span class="mc-num">' + m.num + '</span>' +
             '<span class="mc-title">' + m.title + '</span><span class="mc-zh">' + m.zh + '</span>' +
             '<span class="mc-meta">' + m.lessons.length + ' 節 · ' + (m.labs || []).length + ' 個實驗 · ' + m.quiz.length + ' 題</span>' +
             '<span class="mc-bar"><i style="width:' + Math.round(s.pct * 100) + '%"></i></span></a>';
@@ -307,11 +307,11 @@
       '<div class="mod-prog"><span class="mp-bar"><i style="width:' + Math.round(s.pct * 100) + '%"></i></span><span class="mp-text">' +
       s.done + ' / ' + s.total + ' 節完成 · 測驗' + (s.quiz ? '已通過' : '未通過') + '</span></div></header>' +
       '<nav class="tabs" role="tablist">' + TABS.map(([k, label]) =>
-        '<a role="tab" href="#/' + m.id + '/' + k + '" class="' + (k === tab ? 'on' : '') + '" aria-selected="' + (k === tab) + '">' + label +
+        '<a role="tab" href="#' + m.id + '-' + k + '" class="' + (k === tab ? 'on' : '') + '" aria-selected="' + (k === tab) + '">' + label +
         (k === 'labs' ? ' <small>' + (m.labs || []).length + '</small>' : k === 'quiz' ? ' <small>' + m.quiz.length + '</small>' : '') + '</a>').join('') + '</nav>' +
       '<section class="tab-body"></section>' +
-      '<nav class="pager">' + (prev ? '<a href="#/' + prev.id + '">← ' + prev.num + ' ' + prev.title + '</a>' : '<span></span>') +
-      (next ? '<a href="#/' + next.id + '">' + next.num + ' ' + next.title + ' →</a>' : '<a href="#/finish">學習報告 →</a>') + '</nav>';
+      '<nav class="pager">' + (prev ? '<a href="#' + prev.id + '">← ' + prev.num + ' ' + prev.title + '</a>' : '<span></span>') +
+      (next ? '<a href="#' + next.id + '">' + next.num + ' ' + next.title + ' →</a>' : '<a href="#finish">學習報告 →</a>') + '</nav>';
     const body = $('.tab-body', main);
     if (tab === 'learn') renderLessons(m, body, anchor);
     else if (tab === 'labs') renderLabs(m, body);
@@ -329,7 +329,7 @@
 
   function renderLessons(m, body, anchor) {
     body.innerHTML = '<ol class="toc">' + m.lessons.map(l =>
-      '<li class="' + (lessonDone(l) ? 'done' : '') + '" data-key="' + l.key + '"><a href="#/' + m.id + '/learn/' + l.id + '"><span class="toc-idx">' + l.idx +
+      '<li class="' + (lessonDone(l) ? 'done' : '') + '" data-key="' + l.key + '"><a href="#' + m.id + '-learn-' + l.id + '"><span class="toc-idx">' + l.idx +
       '</span>' + l.title + ' <small>' + l.zh + '</small></a></li>').join('') + '</ol>' +
       m.lessons.map(l => {
         const qa = (l.qa || []).map(([q, a]) => '<details class="qa"><summary><span class="qa-tag">面試題</span>' + q + '</summary><div class="qa-a">' + a + '</div></details>').join('');
@@ -424,7 +424,7 @@
       save(); refreshModHead(m);
       result.className = 'quiz-result ' + (passed ? 'good' : 'bad');
       result.innerHTML = '答對 ' + correct + ' / ' + qs.length + ' 題（' + Math.round(score * 100) + '%）— ' +
-        (passed ? '通過！' + (modules[modules.indexOf(m) + 1] ? ' <a href="#/' + modules[modules.indexOf(m) + 1].id + '">前往下一個模組 →</a>' : ' <a href="#/finish">查看學習報告 →</a>') : '還差一點，看完解析後再試一次。');
+        (passed ? '通過！' + (modules[modules.indexOf(m) + 1] ? ' <a href="#' + modules[modules.indexOf(m) + 1].id + '">前往下一個模組 →</a>' : ' <a href="#finish">查看學習報告 →</a>') : '還差一點，看完解析後再試一次。');
       $('[type=submit]', form).hidden = true; $('[data-retry]', form).hidden = false;
       result.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     });
@@ -436,9 +436,13 @@
   function sheetHTML(m) {
     return '<div class="sheet"><h2>模組 ' + m.num + '：' + m.title + '（' + m.zh + '）重點整理</h2><ul>' + m.sheet.map(x => '<li>' + x + '</li>').join('') + '</ul></div>';
   }
+  // 嵌入在其他頁面框架中（例如線上分享版）時瀏覽器不允許列印，就不顯示列印按鈕
+  const CAN_PRINT = (() => { try { return window.self === window.top; } catch (e) { return false; } })();
+
   function renderSheet(m, body) {
-    body.innerHTML = sheetHTML(m) + '<div class="sheet-actions"><button type="button" class="btn" data-print>列印／存成 PDF</button></div>';
-    $('[data-print]', body).onclick = () => printHTML(sheetHTML(m));
+    body.innerHTML = sheetHTML(m) + (CAN_PRINT ? '<div class="sheet-actions"><button type="button" class="btn" data-print>列印／存成 PDF</button></div>' : '');
+    const pb = $('[data-print]', body);
+    if (pb) pb.onclick = () => printHTML(sheetHTML(m));
   }
 
   /* ---------- 學習報告與證書 ---------- */
@@ -466,11 +470,11 @@
       '<div class="stat"><b>' + Math.round(avg * 100) + '%</b><span>測驗平均最佳成績</span></div></div></div></div>' +
       table(['模組', '節數', '測驗', '狀態'], modules.map(m => {
         const s = modStats(m), q = state.quiz[m.id];
-        return ['<a href="#/' + m.id + '">' + m.num + ' ' + m.title + '</a>', s.done + ' / ' + s.total, q ? Math.round(q.best * 100) + '%' : '—',
+        return ['<a href="#' + m.id + '">' + m.num + ' ' + m.title + '</a>', s.done + ' / ' + s.total, q ? Math.round(q.best * 100) + '%' : '—',
           s.complete ? '<span class="good">完成</span>' : '<span class="muted">進行中</span>'];
       })) +
       '<section class="cert-form"><h2>結業證書</h2>' + (eligible
-        ? '<p>恭喜完成全部課程！輸入你要印在證書上的名字：</p><div class="row"><input type="text" id="cert-name" maxlength="40" placeholder="你的名字" value="' + esc(state.name || '') + '"><button type="button" class="btn primary" id="cert-btn">產生並列印證書</button></div>'
+        ? '<p>恭喜完成全部課程！輸入你要印在證書上的名字：</p><div class="row"><input type="text" id="cert-name" maxlength="40" placeholder="你的名字" value="' + esc(state.name || '') + '"><button type="button" class="btn primary" id="cert-btn">' + (CAN_PRINT ? '產生並列印證書' : '產生證書') + '</button></div><div id="cert-out"></div>'
         : '<p class="muted">尚未達成條件：還有 ' + (st.lessons - st.done) + ' 節未完成、' + (st.quizzes - st.passed) + ' 個測驗未通過。</p><a class="btn primary" href="' + nextTarget() + '">繼續學習 →</a>') +
       '<p class="muted small">此證書為本課程的完成證明，並非官方或第三方認證。</p></section>' +
       '<section class="reset-zone"><h2>重設進度</h2><p class="muted">清除這個瀏覽器中保存的所有學習紀錄。</p><button type="button" class="btn danger" id="reset-btn">清除全部進度</button></section>';
@@ -480,13 +484,22 @@
       if (!name) { $('#cert-name').focus(); return; }
       state.name = name; save();
       const d = new Date();
-      printHTML('<div class="cert"><div class="cert-inner"><p class="cert-eyebrow">Certificate of Completion</p><h1>結業證書</h1><p class="cert-name">' + esc(name) + '</p>' +
+      const cert = '<div class="cert"><div class="cert-inner"><p class="cert-eyebrow">Certificate of Completion</p><h1>結業證書</h1><p class="cert-name">' + esc(name) + '</p>' +
         '<p>已完成 <b>API Engineering：從 HTTP 到 AI-Powered API</b> 互動式課程<br>全部 ' + modules.length + ' 個模組、' + st.lessons + ' 節課程，並通過所有模組測驗（平均成績 ' + Math.round(avg * 100) + '%）。</p>' +
         '<p class="cert-mods">' + modules.map(m => m.title).join(' · ') + '</p>' +
-        '<p class="cert-date">' + d.getFullYear() + ' 年 ' + (d.getMonth() + 1) + ' 月 ' + d.getDate() + ' 日</p></div></div>');
+        '<p class="cert-date">' + d.getFullYear() + ' 年 ' + (d.getMonth() + 1) + ' 月 ' + d.getDate() + ' 日</p></div></div>';
+      $('#cert-out').innerHTML = cert;                      // 直接顯示在頁面上
+      if (CAN_PRINT) printHTML(cert);
     };
-    $('#reset-btn').onclick = () => {
-      if (!confirm('確定要清除全部學習進度嗎？此動作無法復原。')) return;
+    // 兩段式確認（不依賴 confirm()，在嵌入框架中也能運作）
+    const rb = $('#reset-btn');
+    rb.onclick = () => {
+      if (!rb.dataset.armed) {
+        rb.dataset.armed = '1';
+        rb.textContent = '確定要清除嗎？再按一次';
+        setTimeout(() => { if (rb.isConnected && rb.dataset.armed) { delete rb.dataset.armed; rb.textContent = '清除全部進度'; } }, 4000);
+        return;
+      }
       state = defaults(); save(); applyTheme(); renderFinish(); updateSidebar('finish');
     };
   }
@@ -523,7 +536,7 @@
     box.hidden = false;
     box.innerHTML = hits.length ? hits.slice(0, 20).map(({ it, pos }) => {
       const snip = pos >= 0 ? esc(it.text.slice(Math.max(0, pos - 18), pos + 42)) : '';
-      return '<a href="#/' + it.m.id + '/learn/' + it.l.id + '"><b>' + it.l.idx + ' ' + esc(it.l.title) + '</b><small>' + esc(it.l.zh) + (snip ? ' — …' + snip + '…' : '') + '</small></a>';
+      return '<a href="#' + it.m.id + '-learn-' + it.l.id + '"><b>' + it.l.idx + ' ' + esc(it.l.title) + '</b><small>' + esc(it.l.zh) + (snip ? ' — …' + snip + '…' : '') + '</small></a>';
     }).join('') : '<p class="muted">找不到「' + esc(q) + '」</p>';
   }
 
@@ -543,8 +556,10 @@
   function route() {
     cleanups.forEach(f => { try { f(); } catch (e) { /* ignore */ } });
     cleanups = [];
-    const parts = location.hash.replace(/^#\/?/, '').split('/');
-    const page = parts[0] || '', tab = parts[1] || 'learn', anchor = parts[2] || '';
+    // 網址格式：#m04、#m04-labs、#m04-learn-jwt（也相容舊的 #/m04/labs 格式）
+    const h = location.hash.replace(/^#\/?/, '');
+    const parts = h.includes('/') ? h.split('/') : h.split('-');
+    const page = parts[0] || '', tab = parts[1] || 'learn', anchor = parts.slice(2).join('-');
     if (byId[page]) renderModule(byId[page], tab, anchor);
     else if (page === 'finish') renderFinish();
     else renderHome();

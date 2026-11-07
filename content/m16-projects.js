@@ -312,7 +312,7 @@ ${flow(['API Gateway（Kong / Envoy）', 'Auth', 'Catalog', 'Orders', 'Payments'
           const rows = list.map((k, i) => {
             const p = P[k], w = Math.ceil(p.h * mult / hrs);
             const from = week + 1; week += w;
-            return ['<b>' + (i + 1) + '. <a href="#/m16/learn/' + ID[k] + '">' + p.name + '</a></b>', '約 ' + fmt(p.h * mult) + ' 小時', '第 ' + from + '–' + week + ' 週', p.mods.map(m => '<a href="#/m' + m + '">' + m + '</a>').join('、')];
+            return ['<b>' + (i + 1) + '. <a href="#m16-learn-' + ID[k] + '">' + p.name + '</a></b>', '約 ' + fmt(p.h * mult) + ' 小時', '第 ' + from + '–' + week + ' 週', p.mods.map(m => '<a href="#m' + m + '">' + m + '</a>').join('、')];
           });
           root.querySelector('.pp-out').innerHTML = table(['專案', '預估工時', '時程', '先複習的模組'], rows) +
             '<div class="kpis"><div class="kpi"><b>' + week + ' 週</b><span>完成全部專案</span></div><div class="kpi"><b>約 ' + fmt(week / 4.3, 1) + ' 個月</b><span>以每週 ' + hrs + ' 小時計</span></div></div>' +
