@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>API Engineering 互動式課程</title>
+  <meta name="description" content="從 HTTP 到 AI-Powered API 的後端工程師養成互動式課程：16 個模組、互動實驗、測驗與實戰專案。">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <div class="layout">
+    <aside class="side" aria-label="課程目錄">
+      <a class="brand" href="#/">API Engineering<small>從 HTTP 到 AI-Powered API</small></a>
+      <div class="total">總進度 <span id="total-pct">0%</span><div class="total-track"><i id="total-bar"></i></div></div>
+      <div class="search">
+        <input id="search" type="search" placeholder="搜尋主題，例如 JWT、Saga…" aria-label="搜尋課程主題" autocomplete="off">
+        <div id="search-results" hidden></div>
+      </div>
+      <nav id="mod-nav"></nav>
+    </aside>
+    <div class="content">
+      <div class="topbar">
+        <button type="button" class="icon-btn" id="menu-btn" aria-label="開啟目錄">☰ 目錄</button>
+        <span id="crumb"></span>
+        <button type="button" class="icon-btn" id="theme-btn" aria-label="切換深色／淺色模式">深色模式</button>
+      </div>
+      <main id="main" tabindex="-1"></main>
+    </div>
+  </div>
+  <div id="scrim"></div>
+  <div id="print-area"></div>
+
+  <noscript><p style="padding:24px">此課程需要啟用 JavaScript。</p></noscript>
+
+  <script src="assets/app.js"></script>
+  <script src="content/m01-foundations.js"></script>
+  <script src="content/m02-rest.js"></script>
+  <script src="content/m03-contracts.js"></script>
+  <script src="content/m04-auth.js"></script>
+  <script src="content/m05-security.js"></script>
+  <script src="content/m06-architectures.js"></script>
+  <script src="content/m07-database.js"></script>
+  <script src="content/m08-distributed.js"></script>
+  <script src="content/m09-performance.js"></script>
+  <script src="content/m10-reliability.js"></script>
+  <script src="content/m11-testing.js"></script>
+  <script src="content/m12-deployment.js"></script>
+  <script src="content/m13-observability.js"></script>
+  <script src="content/m14-governance.js"></script>
+  <script src="content/m15-ai-apis.js"></script>
+  <script src="content/m16-projects.js"></script>
+  <script>Course.start();</script>
+</body>
+</html>

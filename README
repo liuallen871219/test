@@ -1,0 +1,35 @@
+API Engineering 互動式課程
+==========================
+
+從 HTTP 到 AI-Powered API 的後端工程師養成課程（繁體中文）。
+
+- 16 個模組、112 節課程內容（概念、比較表、Python / FastAPI 範例、常見錯誤、面試題）
+- 21 個互動實驗（瀑布圖、JWT 解碼器、OAuth 流程、限流與斷路器模擬、Saga、負載曲線、LLM 成本計算等）
+- 97 題測驗（每模組 6–7 題，附解析，70% 及格）
+- 6 個實戰專案規格與可勾選的需求檢核表
+- 進度追蹤、全文搜尋、深色模式、手機版、可列印的重點整理與結業證書
+
+使用方式
+--------
+不需要安裝任何東西，直接用瀏覽器開啟 index.html 即可。
+也可以放上 GitHub Pages 或任何靜態網站主機。
+
+學習進度存在你自己瀏覽器的 localStorage，不會上傳到任何地方；
+清除瀏覽器資料或換裝置後進度會重新開始。
+
+檔案結構
+--------
+index.html                課程主頁面
+assets/app.js             路由、進度、測驗、互動元件
+assets/style.css          樣式（含深色模式與手機版）
+content/m01-*.js ...      每個模組的內容、互動實驗與測驗
+docs/course-plan.md       課程規劃文件
+
+新增或修改內容
+--------------
+每個模組是一個 content/mXX-*.js 檔，呼叫 Course.register({...})：
+  lessons  每節的 title / zh / html / qa（面試題）/ checklist（選用）
+  labs     互動實驗，render(root) 負責繪製，可回傳清除函式
+  quiz     選擇題 { q, options, answer, explain }
+  sheet    重點整理條列
+內容中可使用 code()、table()、note()、flow() 等輔助函式（定義在 assets/app.js）。
