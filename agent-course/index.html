@@ -1,0 +1,1028 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Agent 協作課程</title>
+<style>
+:root{
+  --bg:#f7f6f2; --surface:#ffffff; --surface-2:#f0eee8; --text:#1d1c1a; --muted:#6b6862;
+  --border:#e2dfd7; --accent:#c4562b; --accent-soft:#f6e3d9; --ok:#2f7d4f; --ok-soft:#dcefe3;
+  --bad:#b23a3a; --bad-soft:#f6dddd; --warn:#a86b0c; --warn-soft:#f6ebd3; --info:#2c5e9e; --info-soft:#dde7f5;
+  --shadow:0 1px 2px rgba(0,0,0,.05),0 4px 16px rgba(0,0,0,.04);
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#161513; --surface:#1f1e1b; --surface-2:#2a2825; --text:#ecebe6; --muted:#a19d95;
+    --border:#37342f; --accent:#e47a4f; --accent-soft:#3a2519; --ok:#5fbf86; --ok-soft:#1c3226;
+    --bad:#e47373; --bad-soft:#3a1f1f; --warn:#e0a84a; --warn-soft:#382a14; --info:#78a6e6; --info-soft:#1c2a3e;
+    --shadow:0 1px 2px rgba(0,0,0,.3);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#161513; --surface:#1f1e1b; --surface-2:#2a2825; --text:#ecebe6; --muted:#a19d95;
+  --border:#37342f; --accent:#e47a4f; --accent-soft:#3a2519; --ok:#5fbf86; --ok-soft:#1c3226;
+  --bad:#e47373; --bad-soft:#3a1f1f; --warn:#e0a84a; --warn-soft:#382a14; --info:#78a6e6; --info-soft:#1c2a3e;
+  --shadow:0 1px 2px rgba(0,0,0,.3);
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--text);font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;cursor:pointer}
+code,pre{font-family:var(--mono);font-size:.88em}
+code{background:var(--surface-2);padding:.1em .35em;border-radius:4px}
+pre{background:var(--surface-2);padding:12px 14px;border-radius:8px;overflow-x:auto;line-height:1.5;margin:0}
+a{color:var(--accent)}
+
+.app{display:grid;grid-template-columns:290px 1fr;min-height:100vh}
+aside{background:var(--surface);border-right:1px solid var(--border);padding:20px 14px;position:sticky;top:0;height:100vh;overflow-y:auto}
+.brand{display:flex;align-items:center;gap:10px;padding:0 8px 14px}
+.brand-mark{width:34px;height:34px;border-radius:9px;background:var(--accent);color:#fff;display:grid;place-items:center;font-weight:700}
+.brand h1{font-size:16px;margin:0;line-height:1.3}
+.brand small{color:var(--muted);font-size:12px}
+.progress{margin:4px 8px 16px}
+.progress-bar{height:6px;background:var(--surface-2);border-radius:99px;overflow:hidden}
+.progress-bar > i{display:block;height:100%;background:var(--accent);width:0;transition:width .4s}
+.progress-label{font-size:12px;color:var(--muted);margin-top:6px;display:flex;justify-content:space-between}
+nav ol{list-style:none;margin:0;padding:0}
+nav button{width:100%;text-align:left;background:none;border:0;border-radius:8px;padding:9px 10px;display:flex;gap:10px;align-items:flex-start}
+nav button:hover{background:var(--surface-2)}
+nav button.active{background:var(--accent-soft)}
+nav .num{flex:none;width:24px;height:24px;border-radius:50%;border:1.5px solid var(--border);display:grid;place-items:center;font-size:12px;font-weight:600;color:var(--muted);margin-top:1px}
+nav button.active .num{border-color:var(--accent);color:var(--accent)}
+nav button.done .num{background:var(--ok);border-color:var(--ok);color:#fff}
+nav .t{font-size:14px;font-weight:600;line-height:1.35}
+nav .s{font-size:12px;color:var(--muted);line-height:1.3}
+.aside-foot{margin:16px 8px 0;display:flex;gap:8px}
+.chip-btn{border:1px solid var(--border);background:var(--surface);border-radius:8px;padding:6px 10px;font-size:13px}
+.chip-btn:hover{background:var(--surface-2)}
+
+main{padding:32px 40px 80px;max-width:960px;width:100%}
+.mobile-top{display:none}
+.eyebrow{color:var(--accent);font-weight:700;font-size:13px;letter-spacing:.06em;text-transform:uppercase}
+h2.title{font-size:30px;line-height:1.25;margin:6px 0 6px}
+.subtitle{color:var(--muted);margin:0 0 22px}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:22px;overflow-x:auto}
+.tabs button{background:none;border:0;padding:10px 14px;border-bottom:2px solid transparent;color:var(--muted);font-weight:600;white-space:nowrap}
+.tabs button.active{color:var(--text);border-bottom-color:var(--accent)}
+.tabs .badge{display:inline-block;margin-left:6px;font-size:11px;background:var(--ok);color:#fff;border-radius:99px;padding:0 6px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;box-shadow:var(--shadow);margin-bottom:16px}
+.card h3{margin:0 0 8px;font-size:18px}
+.card h4{margin:14px 0 6px;font-size:15px}
+.card p:first-child{margin-top:0}
+.card p:last-child{margin-bottom:0}
+.goals{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin:0;padding:0;list-style:none}
+.goals li{background:var(--surface-2);border-radius:8px;padding:10px 12px;font-size:14px}
+.goals li::before{content:"✓ ";color:var(--ok);font-weight:700}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.concept{border-left:3px solid var(--accent);padding:2px 0 2px 14px;margin:12px 0}
+.concept b{display:block}
+.callout{border-radius:10px;padding:12px 14px;font-size:14.5px;margin:12px 0}
+.callout.tip{background:var(--info-soft)}
+.callout.warn{background:var(--warn-soft)}
+.callout.ok{background:var(--ok-soft)}
+.callout.bad{background:var(--bad-soft)}
+table.t{width:100%;border-collapse:collapse;font-size:14px}
+table.t th,table.t td{border-bottom:1px solid var(--border);padding:8px 6px;text-align:left;vertical-align:top}
+table.t th{color:var(--muted);font-weight:600}
+.table-wrap{overflow-x:auto}
+
+.btn{border:0;background:var(--accent);color:#fff;border-radius:8px;padding:9px 16px;font-weight:600}
+.btn:hover{filter:brightness(1.06)}
+.btn.ghost{background:var(--surface-2);color:var(--text)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.pager{display:flex;justify-content:space-between;margin-top:26px;gap:10px}
+
+/* classify widget */
+.cls-item{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:10px 12px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;flex-wrap:wrap;background:var(--surface)}
+.cls-item .txt{flex:1 1 260px;font-size:14.5px}
+.cls-opts{display:flex;gap:6px;flex-wrap:wrap}
+.cls-opts button{border:1px solid var(--border);background:var(--surface);border-radius:99px;padding:4px 11px;font-size:13px}
+.cls-opts button.sel{background:var(--accent);border-color:var(--accent);color:#fff}
+.cls-item.right{border-color:var(--ok);background:var(--ok-soft)}
+.cls-item.wrong{border-color:var(--bad);background:var(--bad-soft)}
+.cls-item .why{flex-basis:100%;font-size:13px;color:var(--muted);display:none}
+.cls-item.right .why,.cls-item.wrong .why{display:block}
+
+/* quiz */
+.q{margin-bottom:18px}
+.q .stem{font-weight:600;margin-bottom:8px}
+.q label{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--border);border-radius:9px;padding:9px 12px;margin-bottom:6px;cursor:pointer;font-size:14.5px;background:var(--surface)}
+.q label:hover{background:var(--surface-2)}
+.q input{margin-top:5px;accent-color:var(--accent)}
+.q label.right{border-color:var(--ok);background:var(--ok-soft)}
+.q label.wrong{border-color:var(--bad);background:var(--bad-soft)}
+.q .exp{font-size:13.5px;color:var(--muted);margin-top:4px;display:none}
+.q.answered .exp{display:block}
+.score{font-weight:700;font-size:18px}
+
+/* forms */
+.field{margin-bottom:12px}
+.field label{display:block;font-weight:600;font-size:14px;margin-bottom:4px}
+.field textarea,.field input[type=text],.field select{width:100%;border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:8px;padding:8px 10px;font:inherit;font-size:14px}
+.field textarea{min-height:60px;resize:vertical}
+.meter{height:10px;background:var(--surface-2);border-radius:99px;overflow:hidden}
+.meter i{display:block;height:100%;width:0;transition:width .3s,background .3s}
+.check{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px dashed var(--border);font-size:14.5px}
+.check:last-child{border-bottom:0}
+.check input{margin-top:5px;accent-color:var(--accent)}
+
+/* order widget */
+.ord li{display:flex;align-items:center;gap:8px;border:1px solid var(--border);border-radius:9px;padding:8px 10px;margin-bottom:6px;background:var(--surface);font-size:14.5px}
+.ord{list-style:none;padding:0;margin:0}
+.ord .idx{width:24px;height:24px;border-radius:6px;background:var(--surface-2);display:grid;place-items:center;font-size:12px;font-weight:700;flex:none}
+.ord .lbl{flex:1}
+.ord .mv{border:1px solid var(--border);background:var(--surface);border-radius:6px;width:30px;height:28px}
+.ord li.right{border-color:var(--ok);background:var(--ok-soft)}
+.ord li.wrong{border-color:var(--bad);background:var(--bad-soft)}
+
+/* gantt */
+.gantt{position:relative;border:1px solid var(--border);border-radius:10px;padding:10px;background:var(--surface-2);overflow-x:auto}
+.lane{display:flex;align-items:center;gap:8px;height:34px}
+.lane .ln{width:84px;font-size:12px;color:var(--muted);flex:none}
+.lane .track{position:relative;flex:1;height:24px;min-width:300px}
+.bar{position:absolute;top:0;height:24px;border-radius:6px;font-size:11.5px;color:#fff;display:flex;align-items:center;padding:0 6px;white-space:nowrap;overflow:hidden;transition:left .4s,width .4s}
+.task-pick{display:flex;gap:8px;align-items:center;border:1px solid var(--border);border-radius:9px;padding:8px 10px;margin-bottom:6px;font-size:14px;flex-wrap:wrap;background:var(--surface)}
+.task-pick .nm{flex:1 1 200px}
+.seg{display:inline-flex;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:var(--surface);padding:4px 10px;font-size:12.5px}
+.seg button.sel{background:var(--accent);color:#fff}
+
+/* trace */
+.span{display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:6px;cursor:pointer;font-size:13px}
+.span:hover{background:var(--surface-2)}
+.span.sel{background:var(--accent-soft)}
+.span .name{width:220px;flex:none;font-family:var(--mono);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.span .tr{flex:1;position:relative;height:16px;min-width:200px}
+.span .tr i{position:absolute;top:0;height:16px;border-radius:4px}
+.kv{display:grid;grid-template-columns:120px 1fr;gap:4px 12px;font-size:13.5px}
+.kv dt{color:var(--muted)}
+.kv dd{margin:0;font-family:var(--mono);font-size:12.5px;word-break:break-all}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:12px 0}
+.stat{background:var(--surface-2);border-radius:10px;padding:12px}
+.stat .v{font-size:24px;font-weight:700;line-height:1.2}
+.stat .k{font-size:12.5px;color:var(--muted)}
+
+input[type=range]{width:100%;accent-color:var(--accent)}
+.cert{text-align:center;padding:36px 20px;border:2px solid var(--accent);border-radius:16px;background:var(--surface)}
+.cert h2{margin:6px 0}
+.hidden{display:none !important}
+
+@media (max-width: 860px){
+  .app{grid-template-columns:1fr}
+  aside{position:fixed;inset:0 auto 0 0;width:290px;z-index:20;transform:translateX(-100%);transition:transform .25s;box-shadow:var(--shadow)}
+  aside.open{transform:none}
+  .scrim{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:15}
+  main{padding:16px 16px 60px}
+  .mobile-top{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+  h2.title{font-size:24px}
+  .span .name{width:130px}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside id="aside">
+    <div class="brand">
+      <div class="brand-mark">A</div>
+      <div><h1>AI Agent 協作課程</h1><small>10 堂互動模組</small></div>
+    </div>
+    <div class="progress">
+      <div class="progress-bar"><i id="pbar"></i></div>
+      <div class="progress-label"><span id="plabel">0 / 10 完成</span><span id="ppct">0%</span></div>
+    </div>
+    <nav><ol id="nav"></ol></nav>
+    <div class="aside-foot">
+      <button class="chip-btn" id="themeBtn">切換深淺色</button>
+      <button class="chip-btn" id="resetBtn">重設進度</button>
+    </div>
+  </aside>
+  <div class="scrim hidden" id="scrim"></div>
+  <main id="main">
+    <div class="mobile-top">
+      <button class="chip-btn" id="menuBtn">☰ 目錄</button>
+      <span style="font-weight:600">AI Agent 協作課程</span>
+    </div>
+    <div id="view"></div>
+  </main>
+</div>
+
+<script>
+/* ============================================================
+   課程資料
+   ============================================================ */
+const MODULES = [
+/* ---------- 1 ---------- */
+{
+  id:1, title:"Agent as a Teammate", zh:"把 Agent 當隊友", sub:"Delegation & Context",
+  goals:["理解「委派」與「下指令」的差別","寫出包含目標、背景、限制、完成標準的委派簡報","判斷哪些任務適合交給 Agent"],
+  learn:`
+  <div class="card"><h3>從工具到隊友</h3>
+    <p>把 Agent 當成一位<strong>聰明但剛到職的新同事</strong>：他很能幹，但不知道你腦中的背景。你給的脈絡越完整，成果越接近期待。</p>
+    <div class="grid2">
+      <div class="callout bad"><b>❌ 下指令</b><br>「修一下登入的 bug。」</div>
+      <div class="callout ok"><b>✅ 委派</b><br>「使用者回報 Safari 上登入後會被登出（附 issue #42）。問題可能在 <code>auth/session.ts</code> 的 cookie 設定。請找出原因並修正，不要更動 API 介面；完成標準是新增一個重現此問題的測試且全部測試通過。」</div>
+    </div>
+  </div>
+  <div class="card"><h3>好的委派簡報五要素</h3>
+    <div class="concept"><b>🎯 目標 (Goal)</b>要達成什麼？為什麼重要？</div>
+    <div class="concept"><b>📚 背景 (Context)</b>相關檔案、過去嘗試、已知線索、使用者是誰。</div>
+    <div class="concept"><b>🚧 限制 (Constraints)</b>不能碰什麼、要遵守的慣例、時間或預算。</div>
+    <div class="concept"><b>✅ 完成標準 (Definition of Done)</b>如何判斷做完了？測試通過、輸出格式、驗收條件。</div>
+    <div class="concept"><b>🔁 回報方式 (Check-in)</b>何時該停下來問你？產出要交到哪裡？</div>
+  </div>
+  <div class="card"><h3>什麼任務適合委派？</h3>
+    <div class="table-wrap"><table class="t">
+      <tr><th>適合</th><th>需謹慎</th></tr>
+      <tr><td>目標明確、可驗證（測試、lint、型別檢查）</td><td>需求模糊、只有你知道「對」長什麼樣子</td></tr>
+      <tr><td>重複性高、規則清楚的工作</td><td>不可逆的操作（刪資料、部署正式環境）</td></tr>
+      <tr><td>需要大量閱讀與搜尋的研究</td><td>牽涉組織政治、需要人際判斷的決定</td></tr>
+    </table></div>
+    <div class="callout tip">💡 經驗法則：如果你無法向一位新同事解釋「怎樣算做完」，Agent 也無法做到。</div>
+  </div>`,
+  lab:"brief",
+  quiz:[
+    {q:"以下哪一項最能提升 Agent 完成任務的品質？",o:["使用更強硬的語氣","提供完成標準與相關背景","把任務拆成越短的句子越好","要求 Agent「仔細一點」"],a:1,e:"明確的完成標準與背景，比語氣或形容詞更能引導 Agent。"},
+    {q:"「不要更動公開 API」屬於委派簡報中的哪一個要素？",o:["目標","背景","限制","回報方式"],a:2,e:"這是邊界條件，屬於限制 (Constraints)。"},
+    {q:"哪個任務最不適合在無監督下完全交給 Agent？",o:["為現有函式補上單元測試","整理一份競品功能比較表","直接刪除正式資料庫中「看起來沒用」的表","修正 lint 警告"],a:2,e:"不可逆且影響重大的操作需要人類確認。"}
+  ]
+},
+/* ---------- 2 ---------- */
+{
+  id:2, title:"Context Engineering", zh:"脈絡工程", sub:"CLAUDE.md、Memory",
+  goals:["區分一次性提示、專案記憶與個人偏好","撰寫精簡有效的 CLAUDE.md","管理有限的 context window"],
+  learn:`
+  <div class="card"><h3>Context Window 是稀缺資源</h3>
+    <p>Agent 每一步的判斷都來自當下的 context：系統提示、對話、讀過的檔案、工具輸出。<strong>Context Engineering</strong> 就是決定「什麼該放進去、放在哪、何時放」。</p>
+    <div class="callout warn">⚠️ 塞越多不一定越好。無關資訊會稀釋注意力、增加成本，甚至把 Agent 帶偏。</div>
+  </div>
+  <div class="card"><h3>脈絡的分層</h3>
+    <div class="table-wrap"><table class="t">
+      <tr><th>層級</th><th>放什麼</th><th>例子</th></tr>
+      <tr><td><b>CLAUDE.md（專案）</b></td><td>整個團隊都適用、長期穩定的專案知識</td><td>建置指令、目錄結構、程式風格、測試方式</td></tr>
+      <tr><td><b>使用者層 CLAUDE.md / Memory</b></td><td>只屬於你個人的偏好</td><td>「回覆請用繁體中文」、「我偏好函式式寫法」</td></tr>
+      <tr><td><b>當次提示</b></td><td>只和這個任務有關的資訊</td><td>這次 bug 的錯誤訊息、issue 連結</td></tr>
+      <tr><td><b>按需讀取</b></td><td>大型資料，讓 Agent 需要時自己找</td><td>API 文件、歷史 log、大型程式碼庫</td></tr>
+    </table></div>
+  </div>
+  <div class="card"><h3>一份好的 CLAUDE.md</h3>
+<pre># 專案：Shop API
+
+## 常用指令
+- 安裝：pnpm install
+- 測試：pnpm test（單一檔案：pnpm test path/to/file）
+- 型別檢查：pnpm typecheck
+
+## 架構
+- src/routes   HTTP 路由，只做參數驗證
+- src/services 商業邏輯，所有 DB 存取都在這層
+
+## 慣例
+- 錯誤一律拋出 AppError，不要回傳 null
+- 新增 API 必須同時更新 openapi.yaml
+
+## 注意
+- 不要修改 migrations/ 下已存在的檔案</pre>
+    <div class="callout tip">💡 原則：<b>簡短、具體、可執行</b>。寫「測試指令是 <code>pnpm test</code>」比寫「請確保程式品質」有用得多。</div>
+  </div>`,
+  lab:"classify-context",
+  quiz:[
+    {q:"「本專案用 pnpm test 執行測試」最適合放在哪裡？",o:["每次對話都手動貼上","專案 CLAUDE.md","個人 Memory","不需要告訴 Agent"],a:1,e:"團隊共享、長期穩定的專案知識適合放在專案 CLAUDE.md。"},
+    {q:"為什麼不該把整份 300 頁的 API 文件塞進 CLAUDE.md？",o:["Agent 看不懂長文件","會佔據 context、稀釋重點，應改為按需讀取","CLAUDE.md 有字數上限 100 字","文件會被公開"],a:1,e:"大型參考資料應讓 Agent 按需搜尋讀取。"},
+    {q:"以下哪一句 CLAUDE.md 內容最有效？",o:["請寫出高品質的程式碼","請小心","修改 schema 後執行 pnpm db:generate","你是一位資深工程師"],a:2,e:"具體、可執行的指示最有效。"}
+  ]
+},
+/* ---------- 3 ---------- */
+{
+  id:3, title:"Task Planning", zh:"任務規劃", sub:"Planning & Decomposition",
+  goals:["在動手前先讓 Agent 產出計畫","把大任務拆成可驗證的小步驟","辨識步驟之間的相依關係"],
+  learn:`
+  <div class="card"><h3>先規劃，再執行</h3>
+    <p>複雜任務直接開工，常導致方向錯誤後大量返工。讓 Agent <strong>先探索 → 提出計畫 → 你審核 → 再執行</strong>，能把錯誤在最便宜的時候攔下來。</p>
+    <div class="row" style="gap:6px;font-size:14px">
+      <span class="callout tip" style="margin:0">1. 探索</span>→
+      <span class="callout tip" style="margin:0">2. 計畫</span>→
+      <span class="callout warn" style="margin:0">3. 人類審核</span>→
+      <span class="callout tip" style="margin:0">4. 執行</span>→
+      <span class="callout ok" style="margin:0">5. 驗證</span>
+    </div>
+  </div>
+  <div class="card"><h3>好的拆解原則</h3>
+    <div class="concept"><b>每一步都可驗證</b>步驟結束時有明確的檢查點（測試通過、畫面可見、檔案產出）。</div>
+    <div class="concept"><b>大小適中</b>一步能在一次專注中完成；太大難以審查，太小則管理成本過高。</div>
+    <div class="concept"><b>標出相依</b>哪些步驟必須依序？哪些可以平行？這是第 4 課編排的基礎。</div>
+    <div class="concept"><b>先處理風險最高的未知</b>先驗證最不確定的假設，避免在錯誤的基礎上蓋房子。</div>
+  </div>
+  <div class="card"><h3>範例：「新增使用者匯出 CSV 功能」</h3>
+<pre>1. 探索：找出使用者資料模型與現有匯出功能（如有）
+2. 確認需求：欄位、權限、檔案大小上限 → 向人類確認
+3. 實作 service：exportUsersToCsv()，含單元測試
+4. 實作 API route：GET /admin/users/export
+5. 前端加入「匯出」按鈕
+6. 端對端測試 + 更新文件</pre>
+    <div class="callout tip">💡 在許多 Agent 工具中都有「計畫模式」：Agent 只能讀、不能改，產出計畫讓你核准後才進入執行。</div>
+  </div>`,
+  lab:"order",
+  quiz:[
+    {q:"為什麼要在執行前審核 Agent 的計畫？",o:["讓 Agent 休息","在修改成本最低時發現方向錯誤","計畫可以取代測試","Agent 規定必須這麼做"],a:1,e:"計畫階段改方向最便宜，寫完程式後才改代價高。"},
+    {q:"好的任務步驟應具備什麼特徵？",o:["越大越好，減少溝通","每一步都有可驗證的檢查點","不需要考慮順序","全部交給一個步驟完成"],a:1,e:"可驗證的檢查點讓進度與品質都可控。"},
+    {q:"面對不確定性高的技術假設，應該？",o:["留到最後再處理","優先驗證","忽略它","讓 Agent 自行猜測"],a:1,e:"先驗證最高風險的未知，避免大量返工。"}
+  ]
+},
+/* ---------- 4 ---------- */
+{
+  id:4, title:"Agent Orchestration", zh:"Agent 編排", sub:"Subagents、Parallel Execution",
+  goals:["理解主 Agent 與 Subagent 的分工","判斷任務何時可平行執行","利用 subagent 隔離 context"],
+  learn:`
+  <div class="card"><h3>主 Agent 與 Subagent</h3>
+    <p><strong>主 Agent（Orchestrator）</strong>負責理解目標、拆解任務、整合結果；<strong>Subagent</strong> 拿到一個聚焦的子任務，在<em>自己獨立的 context</em> 中完成，只把精簡的結論回傳。</p>
+    <div class="grid2">
+      <div class="callout tip"><b>好處 1：Context 隔離</b><br>搜尋 200 個檔案的過程留在 subagent 裡，主 Agent 只收到「答案在 3 個檔案中」。</div>
+      <div class="callout tip"><b>好處 2：平行加速</b><br>彼此獨立的子任務可同時進行，縮短總時間。</div>
+      <div class="callout tip"><b>好處 3：專業化</b><br>不同 subagent 可有不同的指示、工具與權限（例如唯讀的審查者）。</div>
+      <div class="callout warn"><b>成本</b><br>每個 subagent 都從零開始理解脈絡，簡單任務拆太細反而更慢更貴。</div>
+    </div>
+  </div>
+  <div class="card"><h3>何時平行？何時依序？</h3>
+    <div class="table-wrap"><table class="t">
+      <tr><th>可以平行</th><th>必須依序</th></tr>
+      <tr><td>同時研究三個不同的函式庫</td><td>B 需要 A 的輸出（先設計 schema 才能寫 API）</td></tr>
+      <tr><td>分別審查前端與後端程式</td><td>兩個任務會修改同一個檔案（避免衝突）</td></tr>
+      <tr><td>為多個獨立模組補測試</td><td>需要人類在中間做決定</td></tr>
+    </table></div>
+    <div class="callout tip">💡 給 subagent 的指示要像第 1 課的委派簡報一樣完整 —— 它看不到你和主 Agent 的對話。</div>
+  </div>`,
+  lab:"parallel",
+  quiz:[
+    {q:"使用 subagent 進行大範圍搜尋的主要好處是？",o:["subagent 比較聰明","搜尋過程不會塞滿主 Agent 的 context","不需要給任何指示","可以略過權限檢查"],a:1,e:"Context 隔離讓主 Agent 只收到精簡結論。"},
+    {q:"以下哪組任務「不適合」平行執行？",o:["研究三個不同的套件","設計資料庫 schema 與根據該 schema 撰寫 API","審查前端與後端程式碼","翻譯三份獨立文件"],a:1,e:"API 依賴 schema 的輸出，存在相依。"},
+    {q:"給 subagent 的任務說明應該？",o:["越短越好，它會自己理解","像委派簡報一樣包含完整目標與背景","只寫一個關鍵字","直接複製主對話全文"],a:1,e:"Subagent 看不到主對話，需要完整、聚焦的簡報。"}
+  ]
+},
+/* ---------- 5 ---------- */
+{
+  id:5, title:"Agent Verification", zh:"Agent 驗證", sub:"Tests、Evals、Hooks",
+  goals:["讓 Agent 擁有自我驗證的回饋迴圈","區分 Tests 與 Evals 的用途","用 Hooks 在關鍵時間點自動檢查"],
+  learn:`
+  <div class="card"><h3>沒有驗證，就沒有信任</h3>
+    <p>Agent 能否可靠完成任務，關鍵在於它<strong>能不能自己知道做對了沒</strong>。給它一個可執行的回饋迴圈：寫程式 → 跑測試 → 讀錯誤 → 修正 → 再跑。</p>
+  </div>
+  <div class="card"><h3>三種驗證工具</h3>
+    <div class="concept"><b>🧪 Tests（測試）</b>驗證<em>程式碼</em>的行為是否正確。確定性、快速、二元結果。例：單元測試、型別檢查、lint、E2E。</div>
+    <div class="concept"><b>📊 Evals（評估）</b>驗證 <em>Agent 或模型</em>本身的表現。用一組代表性任務衡量成功率，常用於比較提示、模型或流程的改動。例：「100 個客服問題中正確回答幾題」。</div>
+    <div class="concept"><b>🪝 Hooks（掛鉤）</b>在 Agent 生命週期的特定時刻<em>自動執行</em>的指令，不依賴 Agent 記得去做。</div>
+  </div>
+  <div class="card"><h3>Hooks 常見觸發點</h3>
+    <div class="table-wrap"><table class="t">
+      <tr><th>事件</th><th>時機</th><th>典型用途</th></tr>
+      <tr><td><code>PreToolUse</code></td><td>工具執行前</td><td>擋下危險指令、檢查要寫入的路徑</td></tr>
+      <tr><td><code>PostToolUse</code></td><td>工具執行後</td><td>編輯檔案後自動格式化、跑 lint</td></tr>
+      <tr><td><code>UserPromptSubmit</code></td><td>使用者送出訊息時</td><td>自動附加脈絡、過濾敏感資訊</td></tr>
+      <tr><td><code>Stop</code></td><td>Agent 準備結束回合時</td><td>確認測試全過才允許結束</td></tr>
+      <tr><td><code>SessionStart</code></td><td>工作階段開始時</td><td>安裝依賴、載入環境資訊</td></tr>
+    </table></div>
+<pre style="margin-top:12px">{
+  "hooks": {
+    "PostToolUse": [{
+      "matcher": "Edit|Write",
+      "hooks": [{ "type": "command", "command": "npx prettier --write \\"$FILE\\"" }]
+    }]
+  }
+}</pre>
+    <div class="callout tip">💡 CLAUDE.md 是「建議」，Hook 是「保證」。必須每次發生的事，用 Hook。</div>
+  </div>`,
+  lab:"classify-hooks",
+  quiz:[
+    {q:"想比較兩版系統提示哪一版讓 Agent 表現更好，應使用？",o:["單元測試","Evals","Lint","PostToolUse hook"],a:1,e:"Evals 衡量 Agent 整體在一組任務上的表現。"},
+    {q:"「每次編輯檔案後都要自動格式化」最可靠的做法是？",o:["寫在 CLAUDE.md 請 Agent 記得","設定 PostToolUse hook","每次手動提醒","寫在 README"],a:1,e:"Hook 由系統自動執行，不依賴 Agent 記憶。"},
+    {q:"讓 Agent 能自我修正的關鍵是？",o:["更長的提示","可執行的回饋迴圈（如測試）","更多的 subagent","關閉所有權限"],a:1,e:"有測試等回饋，Agent 才能自己發現並修正錯誤。"}
+  ]
+},
+/* ---------- 6 ---------- */
+{
+  id:6, title:"Agent Governance", zh:"Agent 治理", sub:"Permissions、Sandbox",
+  goals:["設計 allow / ask / deny 權限規則","理解沙箱對檔案與網路的隔離","依風險決定 Agent 的自主程度"],
+  learn:`
+  <div class="card"><h3>最小權限原則</h3>
+    <p>Agent 越有能力，越需要清楚的邊界。治理的目標不是阻止 Agent 工作，而是<strong>讓安全的事情暢通、危險的事情需要確認或被禁止</strong>。</p>
+  </div>
+  <div class="card"><h3>三種權限決策</h3>
+    <div class="grid2">
+      <div class="callout ok"><b>✅ Allow（允許）</b><br>低風險、可逆、頻繁的操作。例：讀檔、跑測試、<code>git status</code>。</div>
+      <div class="callout warn"><b>❓ Ask（詢問）</b><br>有影響但偶爾需要的操作。例：<code>git push</code>、安裝新套件。</div>
+      <div class="callout bad"><b>⛔ Deny（拒絕）</b><br>高風險或不可逆。例：讀取 <code>.env</code> 機密、<code>rm -rf</code>、正式環境部署。</div>
+    </div>
+<pre style="margin-top:12px">{
+  "permissions": {
+    "allow": ["Bash(npm run test:*)", "Bash(git status)", "Read(src/**)"],
+    "ask":   ["Bash(git push:*)", "Bash(npm install:*)"],
+    "deny":  ["Read(./.env)", "Read(./secrets/**)", "Bash(rm -rf:*)"]
+  }
+}</pre>
+  </div>
+  <div class="card"><h3>沙箱 (Sandbox)</h3>
+    <p>權限規則管「Agent 想做什麼」，沙箱則在作業系統層面限制「Agent 實際能碰到什麼」：</p>
+    <div class="concept"><b>檔案系統隔離</b>只能寫入專案目錄，碰不到家目錄的 SSH 金鑰。</div>
+    <div class="concept"><b>網路隔離</b>只允許連到白名單網域，防止資料外洩或下載惡意程式。</div>
+    <div class="concept"><b>可拋棄環境</b>在容器或雲端 VM 中執行，出事就整個丟掉重來。</div>
+    <div class="callout tip">💡 沙箱越嚴密，就越能放心給 Agent 更多自主權 —— 安全與效率不是零和。</div>
+  </div>`,
+  lab:"classify-perms",
+  quiz:[
+    {q:"「讀取 .env 檔案」最適合的權限設定是？",o:["Allow","Ask","Deny","不需設定"],a:2,e:"機密檔案應明確拒絕讀取。"},
+    {q:"沙箱的網路隔離主要防範什麼？",o:["Agent 執行速度太快","資料外洩與連到不受信任的主機","測試失敗","程式碼風格不一致"],a:1,e:"網路白名單限制資料流向與來源。"},
+    {q:"為什麼「跑測試」通常設為 Allow？",o:["測試不重要","低風險、可逆且頻繁，每次詢問會拖慢工作","測試會自動部署","Agent 不會跑測試"],a:1,e:"低風險高頻操作設為 Allow，減少不必要的打擾。"}
+  ]
+},
+/* ---------- 7 ---------- */
+{
+  id:7, title:"Agent Observability", zh:"Agent 可觀測性", sub:"Tracing、Metrics",
+  goals:["讀懂一次 Agent 執行的 trace","找出延遲與成本的瓶頸","定義值得追蹤的關鍵指標"],
+  learn:`
+  <div class="card"><h3>看見 Agent 在做什麼</h3>
+    <p>Agent 會自主做出數十個決定。當結果出錯或太慢時，你需要回答：<strong>它在哪一步做了什麼？花了多少時間與 token？為什麼這麼選？</strong></p>
+  </div>
+  <div class="card"><h3>Tracing：一次執行的完整軌跡</h3>
+    <p>一個 <b>trace</b> 由多個巢狀的 <b>span</b> 組成：每次模型呼叫、每次工具使用、每個 subagent 都是一個 span，記錄開始/結束時間、輸入輸出、token 數、錯誤。</p>
+<pre>trace: "修正登入 bug"
+├─ llm.call         規劃          1.2s  3.1k tokens
+├─ tool.grep        搜尋 session  0.3s
+├─ subagent.explore 研究 cookie  12.4s  18k tokens
+│   ├─ tool.read ×8
+│   └─ llm.call ×3
+├─ tool.edit        session.ts    0.1s
+└─ tool.bash        npm test     45.0s  ← 瓶頸！</pre>
+  </div>
+  <div class="card"><h3>關鍵指標 (Metrics)</h3>
+    <div class="table-wrap"><table class="t">
+      <tr><th>類別</th><th>指標</th><th>回答的問題</th></tr>
+      <tr><td>品質</td><td>任務成功率、需人工修正比例</td><td>Agent 做得對嗎？</td></tr>
+      <tr><td>效率</td><td>完成時間、工具呼叫次數、重試次數</td><td>它是否繞遠路？</td></tr>
+      <tr><td>成本</td><td>每任務 token 數、每任務費用</td><td>值得嗎？</td></tr>
+      <tr><td>安全</td><td>權限拒絕次數、Hook 攔截次數</td><td>它是否在嘗試越界？</td></tr>
+    </table></div>
+    <div class="callout tip">💡 OpenTelemetry 是常見的標準，許多 Agent 工具可輸出 OTel 格式的 metrics 與 traces，接到既有監控系統。</div>
+  </div>`,
+  lab:"trace",
+  quiz:[
+    {q:"Trace 中的一個 span 代表什麼？",o:["整個專案","執行中的一個操作單元（模型呼叫、工具使用等）","一行程式碼","一位使用者"],a:1,e:"Span 是 trace 中的單一操作，可以巢狀。"},
+    {q:"若想知道 Agent 是否在「繞遠路」，最該看哪類指標？",o:["成本","效率（工具呼叫次數、重試次數）","安全","使用者數"],a:1,e:"過多的工具呼叫或重試代表路徑效率不佳。"},
+    {q:"「權限拒絕次數突然大增」可能代表？",o:["Agent 正在嘗試越界或規則設定不當","測試全部通過","成本下降","一切正常"],a:0,e:"這是需要調查的安全訊號。"}
+  ]
+},
+/* ---------- 8 ---------- */
+{
+  id:8, title:"Autonomous Workflows", zh:"自主工作流程", sub:"Background Agents",
+  goals:["設計由事件或排程觸發的背景 Agent","定義清楚的範圍與停止條件","讓產出以可審查的形式交付"],
+  learn:`
+  <div class="card"><h3>從對話到背景作業</h3>
+    <p>當任務模式穩定、驗證可靠、權限受控，就可以讓 Agent <strong>在你不在場時工作</strong>：在雲端或 CI 中執行，完成後以 PR、報告或通知交付。</p>
+  </div>
+  <div class="card"><h3>常見觸發方式</h3>
+    <div class="grid2">
+      <div class="callout tip"><b>⏰ 排程</b><br>每天早上整理依賴更新、每週產出程式碼健康報告。</div>
+      <div class="callout tip"><b>⚡ 事件</b><br>新 issue 被標記 <code>agent-fix</code>、CI 失敗、PR 收到 review 意見。</div>
+      <div class="callout tip"><b>📥 佇列</b><br>從待辦清單中逐一領取任務並平行處理。</div>
+      <div class="callout tip"><b>🙋 手動派發</b><br>人在手機上丟出一個任務，Agent 在雲端完成。</div>
+    </div>
+  </div>
+  <div class="card"><h3>背景 Agent 設計檢查表</h3>
+    <div class="concept"><b>範圍明確</b>只處理特定標籤、特定目錄、特定類型的任務。</div>
+    <div class="concept"><b>停止條件</b>最多嘗試幾次、最長執行多久、花費上限多少。卡住時要停，不要無限重試。</div>
+    <div class="concept"><b>可審查的產出</b>開 PR 而不是直接推到 main；寫報告而不是直接改設定。</div>
+    <div class="concept"><b>隔離環境</b>在沙箱或可拋棄容器中執行，使用最小權限的憑證。</div>
+    <div class="concept"><b>通知與可觀測</b>成功、失敗、需要人類時都要通知對的人，並留下 trace。</div>
+    <div class="callout warn">⚠️ 背景 Agent 沒有人即時看著，第 5、6、7 課的驗證、治理、可觀測性在這裡從「加分」變成「必要」。</div>
+  </div>`,
+  lab:"design-bg",
+  quiz:[
+    {q:"背景 Agent 修完 bug 後，最安全的交付方式是？",o:["直接推到 main","開一個 PR 等待審查","直接部署到正式環境","刪掉舊分支"],a:1,e:"可審查的產出讓人類保有最後把關。"},
+    {q:"為什麼背景 Agent 需要「停止條件」？",o:["讓它更快","避免卡住時無限重試、浪費成本","規定要求","讓日誌更短"],a:1,e:"沒有停止條件可能導致失控的成本與副作用。"},
+    {q:"哪一項是讓任務適合自動化的前提？",o:["任務每次都不一樣","有可靠的自動驗證機制","需要大量人際判斷","不可逆的操作"],a:1,e:"可靠的驗證是自主運作的基礎。"}
+  ]
+},
+/* ---------- 9 ---------- */
+{
+  id:9, title:"Human-Agent Collaboration", zh:"人機協作", sub:"Decision & Review",
+  goals:["依「影響 × 可逆性」決定誰來做決策","設計有效率的審查流程","避免審查疲勞與橡皮圖章"],
+  learn:`
+  <div class="card"><h3>誰來決定？決策矩陣</h3>
+    <div class="table-wrap"><table class="t">
+      <tr><th></th><th>可逆</th><th>不可逆</th></tr>
+      <tr><th>低影響</th><td><span class="callout ok" style="display:inline-block;margin:0;padding:4px 10px">Agent 自主決定</span><br><small>變數命名、重構細節</small></td><td><span class="callout tip" style="display:inline-block;margin:0;padding:4px 10px">Agent 做，事後告知</span><br><small>清除暫存快取</small></td></tr>
+      <tr><th>高影響</th><td><span class="callout warn" style="display:inline-block;margin:0;padding:4px 10px">Agent 提案，人審查</span><br><small>新增 API、架構調整</small></td><td><span class="callout bad" style="display:inline-block;margin:0;padding:4px 10px">人類決定</span><br><small>刪除資料、正式上線、對外發布</small></td></tr>
+    </table></div>
+  </div>
+  <div class="card"><h3>讓審查有效率</h3>
+    <div class="concept"><b>要求 Agent 說明「為什麼」</b>不只給 diff，還要附上決策理由、考慮過的替代方案、已知風險。</div>
+    <div class="concept"><b>把注意力放在高風險處</b>請 Agent 標出「最需要你看的 3 個地方」，而不是逐行審查全部。</div>
+    <div class="concept"><b>小批次</b>一個 PR 一個目的。500 行的 PR 只會得到「LGTM」。</div>
+    <div class="concept"><b>給可行動的回饋</b>回饋要具體，並把反覆出現的意見寫回 CLAUDE.md，讓下次不再犯。</div>
+    <div class="callout warn">⚠️ <b>橡皮圖章風險</b>：Agent 產出越多，人越容易不看就核准。審查量超過負荷時，應該減少產出或提升自動驗證，而不是降低審查標準。</div>
+  </div>`,
+  lab:"classify-decision",
+  quiz:[
+    {q:"「刪除正式環境中的使用者資料」應由誰決定？",o:["Agent 自主","Agent 做，事後告知","人類決定","任何人皆可"],a:2,e:"高影響且不可逆，必須由人類決定。"},
+    {q:"哪一種做法最能提升審查效率？",o:["請 Agent 一次送 2000 行的 PR","請 Agent 標出最需要注意的部分並說明理由","不審查直接合併","只看 commit 訊息"],a:1,e:"引導審查者把注意力放在高風險處。"},
+    {q:"同樣的 review 意見反覆出現，最好的做法是？",o:["每次都重寫一次","把它寫進 CLAUDE.md 或自動化檢查","換一個 Agent","忽略"],a:1,e:"把學習沉澱為脈絡或自動化，避免重複。"}
+  ]
+},
+/* ---------- 10 ---------- */
+{
+  id:10, title:"Scaling Agent Teams", zh:"擴展 Agent 團隊", sub:"Workflow Optimization",
+  goals:["找出 Agent 團隊的真正瓶頸","用指標驅動工作流程優化","建立可複用的技能與流程資產"],
+  learn:`
+  <div class="card"><h3>瓶頸會移動</h3>
+    <p>當你從 1 個 Agent 擴展到 10 個，產出量增加了 —— 但<strong>瓶頸往往從「寫」移到「審查、整合、驗證」</strong>。單純增加 Agent 數量，可能只會讓待審 PR 堆積如山。</p>
+    <div class="callout tip">💡 系統的吞吐量由最慢的環節決定（限制理論）。先找到瓶頸，再決定投資在哪。</div>
+  </div>
+  <div class="card"><h3>優化槓桿</h3>
+    <div class="table-wrap"><table class="t">
+      <tr><th>瓶頸</th><th>優化方式</th></tr>
+      <tr><td>人類審查時間不夠</td><td>加強自動驗證、AI 預審、縮小 PR、依風險分級審查</td></tr>
+      <tr><td>Agent 一次成功率低</td><td>改善 CLAUDE.md、補測試、更好的委派範本、用 evals 迭代</td></tr>
+      <tr><td>合併衝突頻繁</td><td>依模組切分任務、worktree 隔離、縮短分支壽命</td></tr>
+      <tr><td>每次都從零開始</td><td>把常用流程封裝成可複用的 skills / slash commands / subagents</td></tr>
+      <tr><td>成本過高</td><td>依任務難度選模型、善用 prompt caching、減少無效 context</td></tr>
+    </table></div>
+  </div>
+  <div class="card"><h3>把經驗變成資產</h3>
+    <div class="concept"><b>Skills / 指令範本</b>團隊共享的「如何做 X」，讓每個 Agent 都用最佳做法。</div>
+    <div class="concept"><b>專門化 Subagents</b>例如「安全審查員」、「測試撰寫者」，各自有最合適的指示與權限。</div>
+    <div class="concept"><b>持續改善迴圈</b>觀測（第 7 課）→ 找瓶頸 → 調整脈絡或流程 → 用 evals 驗證（第 5 課）→ 再觀測。</div>
+  </div>`,
+  lab:"scale",
+  quiz:[
+    {q:"Agent 數量翻倍但交付量沒增加，最可能的原因是？",o:["Agent 太快","瓶頸在審查或整合等其他環節","網路太快","CLAUDE.md 太短"],a:1,e:"吞吐量受限於最慢的環節。"},
+    {q:"降低合併衝突的有效做法是？",o:["讓所有 Agent 改同一個檔案","依模組切分任務並使用隔離的工作目錄","延長分支壽命","關閉測試"],a:1,e:"隔離工作範圍可大幅減少衝突。"},
+    {q:"驗證一次 CLAUDE.md 改動是否真的有幫助，應該？",o:["憑感覺","用 evals 比較改動前後的表現","問 Agent 它喜不喜歡","看檔案長度"],a:1,e:"Evals 提供客觀的前後比較。"}
+  ]
+}
+];
+
+/* ============================================================
+   狀態（localStorage，失敗時以記憶體保存）
+   ============================================================ */
+const KEY = "agent-course-v1";
+let state = {cur:1, tab:"learn", done:{}, lab:{}, quiz:{}};
+try { const s = JSON.parse(localStorage.getItem(KEY)); if (s) state = Object.assign(state, s); } catch(e){}
+function save(){ try{ localStorage.setItem(KEY, JSON.stringify(state)); }catch(e){} }
+try { const t = localStorage.getItem(KEY+"-theme"); if (t) document.documentElement.dataset.theme = t; } catch(e){}
+
+const $ = (s, r=document) => r.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+function isDone(id){ return state.lab[id] && state.quiz[id] && state.quiz[id] >= 2; }
+function refreshDone(id){ state.done[id] = !!isDone(id); save(); renderNav(); }
+
+/* ============================================================
+   導覽列
+   ============================================================ */
+function renderNav(){
+  $("#nav").innerHTML = MODULES.map(m => `
+    <li><button data-id="${m.id}" class="${state.cur===m.id?'active':''} ${state.done[m.id]?'done':''}">
+      <span class="num">${state.done[m.id]?'✓':m.id}</span>
+      <span><div class="t">${m.title}</div><div class="s">${m.zh}・${m.sub}</div></span>
+    </button></li>`).join("") +
+    `<li><button data-id="cert" class="${state.cur==='cert'?'active':''}"><span class="num">★</span><span><div class="t">結業證書</div><div class="s">完成 10 堂課後解鎖</div></span></button></li>`;
+  const n = MODULES.filter(m => state.done[m.id]).length;
+  $("#pbar").style.width = (n*10)+"%";
+  $("#plabel").textContent = `${n} / 10 完成`;
+  $("#ppct").textContent = (n*10)+"%";
+}
+$("#nav").addEventListener("click", e => {
+  const b = e.target.closest("button[data-id]"); if(!b) return;
+  state.cur = b.dataset.id === "cert" ? "cert" : +b.dataset.id; state.tab = "learn"; save();
+  closeMenu(); render(); window.scrollTo(0,0);
+});
+
+/* ============================================================
+   主畫面
+   ============================================================ */
+function render(){
+  renderNav();
+  if (state.cur === "cert") return renderCert();
+  const m = MODULES.find(x => x.id === state.cur);
+  const tabs = [["learn","📖 概念"],["lab","🛠 互動練習"],["quiz","📝 小測驗"]];
+  $("#view").innerHTML = `
+    <div class="eyebrow">第 ${m.id} 課 · ${m.sub}</div>
+    <h2 class="title">${m.title}<span style="color:var(--muted);font-weight:500"> — ${m.zh}</span></h2>
+    <p class="subtitle">完成互動練習並在小測驗答對至少 2 題，即可完成本課。</p>
+    <div class="tabs">${tabs.map(([k,l]) => `<button data-tab="${k}" class="${state.tab===k?'active':''}">${l}${
+      k==='lab'&&state.lab[m.id]?'<span class="badge">✓</span>':''}${k==='quiz'&&state.quiz[m.id]>=2?'<span class="badge">'+state.quiz[m.id]+'/3</span>':''}</button>`).join("")}</div>
+    <div id="pane"></div>
+    <div class="pager">
+      <button class="btn ghost" id="prev" ${m.id===1?'disabled':''}>← 上一課</button>
+      <button class="btn" id="next">${m.id===10?'前往結業證書 →':'下一課 →'}</button>
+    </div>`;
+  $(".tabs").onclick = e => { const b = e.target.closest("button"); if(!b) return; state.tab = b.dataset.tab; save(); render(); };
+  $("#prev").onclick = () => { state.cur = m.id-1; state.tab="learn"; save(); render(); window.scrollTo(0,0); };
+  $("#next").onclick = () => { state.cur = m.id===10 ? "cert" : m.id+1; state.tab="learn"; save(); render(); window.scrollTo(0,0); };
+  const pane = $("#pane");
+  if (state.tab === "learn") {
+    pane.innerHTML = `<div class="card"><h3>學習目標</h3><ul class="goals">${m.goals.map(g=>`<li>${g}</li>`).join("")}</ul></div>${m.learn}
+      <div class="row" style="justify-content:flex-end"><button class="btn" id="toLab">開始互動練習 →</button></div>`;
+    $("#toLab").onclick = () => { state.tab="lab"; save(); render(); };
+  } else if (state.tab === "lab") {
+    LABS[m.lab](pane, m);
+  } else {
+    renderQuiz(pane, m);
+  }
+}
+
+function labDone(m, pane){
+  if (!state.lab[m.id]) { state.lab[m.id] = true; refreshDone(m.id); }
+  const t = $(".tabs button[data-tab=lab]");
+  if (t && !t.querySelector(".badge")) t.insertAdjacentHTML("beforeend",'<span class="badge">✓</span>');
+}
+function nextToQuiz(){ return `<button class="btn" data-goquiz>前往小測驗 →</button>`; }
+document.addEventListener("click", e => { if (e.target.closest("[data-goquiz]")) { state.tab="quiz"; save(); render(); window.scrollTo(0,0);} });
+
+/* ============================================================
+   小測驗
+   ============================================================ */
+function renderQuiz(pane, m){
+  pane.innerHTML = `<div class="card"><h3>小測驗</h3>
+    ${m.quiz.map((q,i) => `<div class="q" data-i="${i}"><div class="stem">${i+1}. ${q.q}</div>
+      ${q.o.map((o,j)=>`<label><input type="radio" name="q${i}" value="${j}"><span>${o}</span></label>`).join("")}
+      <div class="exp">💡 ${q.e}</div></div>`).join("")}
+    <div class="row"><button class="btn" id="submitQ">送出答案</button><span id="qres"></span></div></div>`;
+  $("#submitQ").onclick = () => {
+    let score = 0, all = true;
+    m.quiz.forEach((q,i) => {
+      const box = pane.querySelector(`.q[data-i="${i}"]`);
+      const sel = box.querySelector("input:checked");
+      if (!sel) { all = false; return; }
+    });
+    if (!all) { $("#qres").innerHTML = `<span style="color:var(--warn)">請回答所有題目</span>`; return; }
+    m.quiz.forEach((q,i) => {
+      const box = pane.querySelector(`.q[data-i="${i}"]`);
+      box.classList.add("answered");
+      box.querySelectorAll("label").forEach((l,j) => {
+        l.classList.remove("right","wrong");
+        if (j === q.a) l.classList.add("right");
+        else if (l.querySelector("input").checked) l.classList.add("wrong");
+      });
+      if (+box.querySelector("input:checked").value === q.a) score++;
+    });
+    state.quiz[m.id] = Math.max(state.quiz[m.id]||0, score); refreshDone(m.id);
+    const pass = score >= 2;
+    $("#qres").innerHTML = `<span class="score" style="color:${pass?'var(--ok)':'var(--bad)'}">${score} / 3</span> ${
+      pass ? (state.lab[m.id] ? '🎉 本課完成！' : '測驗通過，別忘了完成互動練習。') : '再試一次！'}`;
+  };
+}
+
+/* ============================================================
+   互動練習
+   ============================================================ */
+function classify(pane, m, {title, intro, options, items}){
+  pane.innerHTML = `<div class="card"><h3>${title}</h3><p>${intro}</p><div id="cls"></div>
+    <div class="row" style="margin-top:12px"><button class="btn" id="chk">檢查答案</button><span id="res"></span></div></div>`;
+  const ans = {};
+  $("#cls").innerHTML = items.map((it,i) => `<div class="cls-item" data-i="${i}">
+      <div class="txt">${it.t}</div>
+      <div class="cls-opts">${options.map((o,j)=>`<button data-j="${j}">${o}</button>`).join("")}</div>
+      <div class="why">${it.why}</div></div>`).join("");
+  $("#cls").onclick = e => {
+    const b = e.target.closest("button[data-j]"); if(!b) return;
+    const row = b.closest(".cls-item"); const i = +row.dataset.i;
+    ans[i] = +b.dataset.j; row.classList.remove("right","wrong");
+    row.querySelectorAll("button").forEach(x => x.classList.toggle("sel", x===b));
+  };
+  $("#chk").onclick = () => {
+    if (Object.keys(ans).length < items.length) { $("#res").innerHTML = `<span style="color:var(--warn)">還有 ${items.length-Object.keys(ans).length} 題未作答</span>`; return; }
+    let ok = 0;
+    items.forEach((it,i) => { const row = pane.querySelector(`.cls-item[data-i="${i}"]`); const r = ans[i]===it.a; row.classList.toggle("right",r); row.classList.toggle("wrong",!r); if(r) ok++; });
+    const pass = ok >= Math.ceil(items.length*0.7);
+    $("#res").innerHTML = `<span class="score">${ok} / ${items.length}</span> ${pass?'👍 通過！ '+nextToQuiz():'達到 70% 即可通過，看看說明後再試一次。'}`;
+    if (pass) labDone(m, pane);
+  };
+}
+
+const LABS = {
+/* 1. 委派簡報產生器 */
+brief(pane, m){
+  const fields = [
+    ["goal","🎯 目標","要達成什麼？為什麼？","例：讓使用者能把訂單匯出成 CSV，客服每週要用來對帳"],
+    ["ctx","📚 背景","相關檔案、已知線索、過去嘗試","例：訂單模型在 src/models/order.ts，已有 PDF 匯出可參考"],
+    ["cons","🚧 限制","不能碰什麼、要遵守的慣例","例：不要新增依賴套件；沿用現有權限中介層"],
+    ["done","✅ 完成標準","怎樣算完成？","例：新增 API 與測試，pnpm test 全過，更新 README"],
+    ["chk","🔁 回報方式","何時停下來問你？","例：若需要修改資料庫 schema，先停下來問我"]
+  ];
+  pane.innerHTML = `<div class="card"><h3>練習：委派簡報產生器</h3>
+    <p>情境：你想請 Agent 實作一個功能。填寫五個要素（每欄至少 10 個字），即時查看簡報品質與產生的委派訊息。</p>
+    ${fields.map(([k,l,h,p])=>`<div class="field"><label for="f-${k}">${l} <span style="color:var(--muted);font-weight:400">— ${h}</span></label><textarea id="f-${k}" data-k="${k}" placeholder="${p}"></textarea></div>`).join("")}
+    <div class="row" style="justify-content:space-between"><b>簡報品質</b><span id="qlabel" style="font-size:14px"></span></div>
+    <div class="meter" style="margin:6px 0 14px"><i id="qmeter"></i></div>
+    <h4>產生的委派訊息</h4><pre id="out" style="white-space:pre-wrap"></pre>
+    <div class="row" style="margin-top:12px"><button class="btn ghost" id="fill">填入範例</button><span id="res"></span></div></div>`;
+  const saved = state["brief"] || {};
+  fields.forEach(([k]) => { $("#f-"+k).value = saved[k]||""; });
+  const upd = () => {
+    const v = {}; fields.forEach(([k]) => v[k] = $("#f-"+k).value.trim());
+    state["brief"] = v; save();
+    const n = fields.filter(([k]) => v[k].length >= 10).length;
+    const pct = n/5*100, mt = $("#qmeter");
+    mt.style.width = pct+"%"; mt.style.background = n<3?'var(--bad)':n<5?'var(--warn)':'var(--ok)';
+    const missing = fields.filter(([k]) => v[k].length < 10).map(f=>f[1]);
+    $("#qlabel").textContent = n===5 ? "完整！Agent 有足夠資訊開工" : "缺少：" + missing.join("、");
+    $("#out").textContent = fields.map(([k,l]) => v[k] ? `${l.slice(2).trim()}：${v[k]}` : "").filter(Boolean).join("\n\n") || "（開始填寫後會出現在這裡）";
+    if (n===5) { $("#res").innerHTML = "✅ 練習完成！ " + nextToQuiz(); labDone(m, pane); } else $("#res").innerHTML = "";
+  };
+  pane.querySelectorAll("textarea").forEach(t => t.oninput = upd);
+  $("#fill").onclick = () => { fields.forEach(([k,,,p]) => $("#f-"+k).value = p.replace(/^例：/,"")); upd(); };
+  upd();
+},
+/* 2 */
+"classify-context"(pane, m){ classify(pane, m, {
+  title:"練習：這段資訊該放在哪裡？", intro:"為每一則資訊選擇最合適的位置。",
+  options:["專案 CLAUDE.md","個人 Memory","當次提示","按需讀取"],
+  items:[
+    {t:"本專案用 <code>pnpm lint --fix</code> 修正格式",a:0,why:"團隊共用、長期穩定 → 專案 CLAUDE.md"},
+    {t:"我個人喜歡回覆時先給結論再給細節",a:1,why:"個人偏好，不該強加給隊友 → 個人 Memory"},
+    {t:"這次 bug 的完整錯誤堆疊 (stack trace)",a:2,why:"只和這次任務有關 → 當次提示"},
+    {t:"第三方支付服務的 400 頁 API 文件",a:3,why:"太大且只有部分相關 → 讓 Agent 需要時搜尋讀取"},
+    {t:"所有資料庫存取都必須透過 services/ 層",a:0,why:"架構慣例，團隊共用 → 專案 CLAUDE.md"},
+    {t:"過去 6 個月的正式環境 log",a:3,why:"大量資料 → 按需搜尋"},
+    {t:"這個 PR 要修的是 issue #128",a:2,why:"任務特定 → 當次提示"},
+    {t:"我的編輯器是 Vim，請給我 Vim 的快捷鍵",a:1,why:"個人環境偏好 → 個人 Memory"}
+  ]});
+},
+/* 3. 排序 */
+order(pane, m){
+  const correct = ["探索現有程式碼與資料模型","向人類確認需求：欄位與權限","設計資料庫 migration","實作 service 層並寫單元測試","實作 API route 與整合測試","前端加入 UI","端對端測試並更新文件"];
+  let cur = state.orderCur || shuffle(correct.slice());
+  pane.innerHTML = `<div class="card"><h3>練習：排出合理的任務順序</h3>
+    <p>任務：「新增『使用者標籤』功能，讓管理員能幫使用者加標籤」。用 ↑ ↓ 把步驟排成最合理的順序。</p>
+    <ol class="ord" id="ord"></ol>
+    <div class="row" style="margin-top:12px"><button class="btn" id="chk">檢查順序</button><button class="btn ghost" id="shuf">重新打亂</button><span id="res"></span></div></div>`;
+  const draw = (mark) => {
+    $("#ord").innerHTML = cur.map((s,i)=>`<li class="${mark?(s===correct[i]?'right':'wrong'):''}"><span class="idx">${i+1}</span><span class="lbl">${s}</span>
+      <button class="mv" data-u="${i}" ${i===0?'disabled':''} aria-label="上移">↑</button><button class="mv" data-d="${i}" ${i===cur.length-1?'disabled':''} aria-label="下移">↓</button></li>`).join("");
+  };
+  $("#ord").onclick = e => {
+    const b = e.target.closest("button"); if(!b) return;
+    const i = +(b.dataset.u ?? b.dataset.d), j = b.dataset.u!==undefined ? i-1 : i+1;
+    [cur[i],cur[j]] = [cur[j],cur[i]]; state.orderCur = cur; save(); draw();
+  };
+  $("#shuf").onclick = () => { cur = shuffle(correct.slice()); state.orderCur = cur; save(); draw(); $("#res").innerHTML=""; };
+  $("#chk").onclick = () => {
+    draw(true); const ok = cur.filter((s,i)=>s===correct[i]).length;
+    if (ok === correct.length) { $("#res").innerHTML = `<span class="score" style="color:var(--ok)">完全正確！</span> ${nextToQuiz()}`; labDone(m,pane); }
+    else $("#res").innerHTML = `<span class="score">${ok} / ${correct.length}</span> 位置正確。提示：先探索與確認需求，資料層 → 服務層 → API → UI。`;
+  };
+  draw();
+},
+/* 4. 平行模擬 */
+parallel(pane, m){
+  const tasks = [
+    {id:"A",n:"研究套件 A 的授權與維護狀況",d:3,dep:[]},
+    {id:"B",n:"研究套件 B 的授權與維護狀況",d:3,dep:[]},
+    {id:"C",n:"研究套件 C 的授權與維護狀況",d:3,dep:[]},
+    {id:"D",n:"根據 A/B/C 結果撰寫比較報告",d:2,dep:["A","B","C"]},
+    {id:"E",n:"依報告結論更新 package.json",d:2,dep:["D"]}
+  ];
+  const colors = ["#c4562b","#2c5e9e","#2f7d4f","#8a4fb0","#a86b0c"];
+  const mode = state.parMode || {A:"main",B:"main",C:"main",D:"main",E:"main"};
+  pane.innerHTML = `<div class="card"><h3>練習：平行執行模擬器</h3>
+    <p>主 Agent 一次只能做一件事；每個 subagent 會額外花 <b>1 單位</b>時間理解脈絡。為每個任務選擇「主 Agent 執行」或「派給 Subagent」，目標：<b>總時間 ≤ 8 單位</b>，且不違反相依關係。</p>
+    <div id="tp"></div>
+    <div class="stats"><div class="stat"><div class="v" id="tot">–</div><div class="k">總時間（單位）</div></div><div class="stat"><div class="v" id="nsub">–</div><div class="k">使用的 subagent 數</div></div></div>
+    <div class="gantt" id="gantt"></div>
+    <p id="res" style="margin-bottom:0"></p></div>`;
+  $("#tp").innerHTML = tasks.map(t=>`<div class="task-pick"><b>${t.id}</b><span class="nm">${t.n} <small style="color:var(--muted)">（${t.d} 單位${t.dep.length?'，需先完成 '+t.dep.join('、'):''}）</small></span>
+    <span class="seg" data-t="${t.id}"><button data-v="main">主 Agent</button><button data-v="sub">Subagent</button></span></div>`).join("");
+  const sim = () => {
+    pane.querySelectorAll(".seg").forEach(s => s.querySelectorAll("button").forEach(b => b.classList.toggle("sel", mode[s.dataset.t]===b.dataset.v)));
+    let mainFree = 0, end = {}, lanes = {main:[]}, subN = 0;
+    // 主 Agent 先派發 subagent（派發瞬間完成），再依序做自己的任務
+    tasks.forEach(t => {
+      const ready = Math.max(0, ...t.dep.map(d => end[d]));
+      if (mode[t.id] === "sub") {
+        subN++; const s = ready; const e = s + 1 + t.d; end[t.id] = e;
+        lanes["sub"+subN] = [{t, s, e, ov:true}];
+      } else {
+        const s = Math.max(mainFree, ready); const e = s + t.d; end[t.id] = e; mainFree = e;
+        lanes.main.push({t, s, e});
+      }
+    });
+    const total = Math.max(...Object.values(end));
+    $("#tot").textContent = total; $("#nsub").textContent = subN;
+    const scale = 100/Math.max(total,13);
+    $("#gantt").innerHTML = Object.entries(lanes).map(([k,arr]) => `<div class="lane"><span class="ln">${k==='main'?'主 Agent':'Subagent '+k.slice(3)}</span><div class="track">${
+      arr.map(x => { const c = colors[tasks.indexOf(x.t)];
+        return (x.ov?`<div class="bar" style="left:${x.s*scale}%;width:${scale}%;background:${c};opacity:.45" title="理解脈絡">ctx</div>`:'') +
+          `<div class="bar" style="left:${(x.ov?x.s+1:x.s)*scale}%;width:${x.t.d*scale}%;background:${c}">${x.t.id}</div>`; }).join("")}</div></div>`).join("") +
+      `<div class="lane"><span class="ln"></span><div class="track" style="height:14px;font-size:11px;color:var(--muted)">${Array.from({length:Math.max(total,13)+1},(_,i)=>`<span style="position:absolute;left:${i*scale}%">${i}</span>`).join("")}</div></div>`;
+    let msg;
+    if (total <= 8) { msg = `<span style="color:var(--ok)"><b>🎉 達成！</b></span> 獨立的 A/B/C 平行處理，而相依的 D、E 留給主 Agent 依序完成，省下了 subagent 的脈絡成本。 ${nextToQuiz()}`; labDone(m,pane); }
+    else if (subN >= 4) msg = `總時間 ${total}。提示：D 和 E 有相依關係，派給 subagent 不會變快，反而多付脈絡成本。`;
+    else msg = `總時間 ${total}。提示：哪些任務彼此獨立、可以同時進行？`;
+    $("#res").innerHTML = msg;
+  };
+  $("#tp").onclick = e => { const b = e.target.closest("button[data-v]"); if(!b) return; mode[b.closest(".seg").dataset.t] = b.dataset.v; state.parMode = mode; save(); sim(); };
+  sim();
+},
+/* 5 */
+"classify-hooks"(pane, m){ classify(pane, m, {
+  title:"練習：選擇正確的驗證機制", intro:"每個需求應該用哪一種機制或 Hook 事件來實現？",
+  options:["PreToolUse","PostToolUse","Stop","Evals","Tests"],
+  items:[
+    {t:"Agent 每次編輯 .ts 檔案後，自動執行 eslint --fix",a:1,why:"工具（編輯）執行後觸發 → PostToolUse"},
+    {t:"阻止 Agent 執行任何包含 <code>rm -rf /</code> 的指令",a:0,why:"必須在執行前攔截 → PreToolUse"},
+    {t:"Agent 結束前必須確認所有測試通過，否則繼續工作",a:2,why:"在 Agent 準備結束時檢查 → Stop"},
+    {t:"比較新舊兩版 CLAUDE.md，哪一版讓 50 個任務的成功率更高",a:3,why:"衡量 Agent 整體表現 → Evals"},
+    {t:"確認 calculateTax() 在稅率為 0 時回傳 0",a:4,why:"驗證程式行為 → 單元測試"},
+    {t:"禁止 Agent 寫入 migrations/ 目錄下的既有檔案",a:0,why:"在寫入前檢查路徑 → PreToolUse"},
+    {t:"評估客服 Agent 在 200 則真實提問上的回答正確率",a:3,why:"Agent 表現的量化評估 → Evals"}
+  ]});
+},
+/* 6 */
+"classify-perms"(pane, m){ classify(pane, m, {
+  title:"練習：設定權限規則", intro:"你正在為團隊的開發專案設定 Agent 權限。為每個操作選擇 Allow / Ask / Deny。",
+  options:["✅ Allow","❓ Ask","⛔ Deny"],
+  items:[
+    {t:"<code>npm run test</code>",a:0,why:"低風險、頻繁、可逆 → Allow"},
+    {t:"讀取 <code>src/</code> 下的原始碼",a:0,why:"Agent 工作的基本需求 → Allow"},
+    {t:"<code>git push origin feature-branch</code>",a:1,why:"會影響遠端與他人，但屬正常工作流程 → Ask"},
+    {t:"讀取 <code>.env.production</code>",a:2,why:"正式環境機密 → Deny"},
+    {t:"<code>npm install 新套件</code>",a:1,why:"引入外部程式碼，有供應鏈風險 → Ask"},
+    {t:"<code>terraform apply</code> 到正式環境",a:2,why:"高影響、難以逆轉 → Deny（交由人類與正式流程）"},
+    {t:"<code>git status</code> / <code>git diff</code>",a:0,why:"唯讀 → Allow"},
+    {t:"<code>curl</code> 上傳檔案到未知網址",a:2,why:"可能造成資料外洩 → Deny"}
+  ]});
+},
+/* 7. Trace 檢視器 */
+trace(pane, m){
+  const spans = [
+    {n:"agent.run 修正結帳錯誤",s:0,d:96,dep:0,tok:"52.4k",type:"agent",io:"任務：修正結帳金額計算錯誤"},
+    {n:"llm.call 規劃",s:0,d:3,dep:1,tok:"4.1k",type:"llm",io:"輸出：計畫 4 步驟"},
+    {n:"tool.grep 'calculateTotal'",s:3,d:1,dep:1,tok:"-",type:"tool",io:"找到 14 個結果"},
+    {n:"subagent.explore 研究折扣邏輯",s:4,d:18,dep:1,tok:"21.7k",type:"agent",io:"結論：折扣在稅前套用兩次"},
+    {n:"tool.read ×11",s:5,d:6,dep:2,tok:"-",type:"tool",io:"讀取 11 個檔案"},
+    {n:"llm.call ×4",s:11,d:10,dep:2,tok:"21.7k",type:"llm",io:"分析折扣流程"},
+    {n:"tool.edit pricing.ts",s:22,d:1,dep:1,tok:"-",type:"tool",io:"+6 −3 行"},
+    {n:"tool.bash npm test",s:23,d:31,dep:1,tok:"-",type:"tool",io:"exit 1：2 個測試失敗",err:true},
+    {n:"llm.call 分析失敗",s:54,d:4,dep:1,tok:"6.2k",type:"llm",io:"需要同步修正測試的 fixture"},
+    {n:"tool.edit fixtures.json",s:58,d:1,dep:1,tok:"-",type:"tool",io:"+2 −2 行"},
+    {n:"tool.bash npm test",s:59,d:32,dep:1,tok:"-",type:"tool",io:"exit 0：全部通過"},
+    {n:"llm.call 總結",s:91,d:5,dep:1,tok:"20.4k",type:"llm",io:"輸出修改摘要"}
+  ];
+  const col = {agent:"var(--info)",llm:"var(--accent)",tool:"var(--ok)"};
+  pane.innerHTML = `<div class="card"><h3>練習：分析一次 Agent 執行的 Trace</h3>
+    <p>點擊每個 span 檢視細節，然後回答下方問題。</p>
+    <div class="row" style="font-size:12.5px;gap:14px;margin-bottom:8px"><span>■ <span style="color:var(--info)">agent</span></span><span>■ <span style="color:var(--accent)">llm</span></span><span>■ <span style="color:var(--ok)">tool</span></span><span style="color:var(--muted)">總時長 96 秒</span></div>
+    <div id="spans" style="overflow-x:auto"></div>
+    <div class="card" style="background:var(--surface-2);box-shadow:none;margin-top:12px"><dl class="kv" id="detail"><dt>提示</dt><dd>點選上方任一 span</dd></dl></div>
+    <h4>問題 1：哪一類操作佔用最多時間？</h4>
+    <div class="cls-opts" id="q1"><button data-v="0">LLM 呼叫</button><button data-v="1">執行測試 (npm test)</button><button data-v="2">讀取檔案</button><button data-v="3">編輯檔案</button></div>
+    <h4>問題 2：最有效的優化建議是？</h4>
+    <div class="cls-opts" id="q2"><button data-v="0">換一個更快的模型</button><button data-v="1">只執行與 pricing 相關的測試檔</button><button data-v="2">減少 grep 次數</button><button data-v="3">取消 subagent</button></div>
+    <p id="res"></p></div>`;
+  $("#spans").innerHTML = spans.map((s,i)=>`<div class="span" data-i="${i}"><span class="name" style="padding-left:${s.dep*14}px">${s.err?'⚠️ ':''}${esc(s.n)}</span>
+    <span class="tr"><i style="left:${s.s/96*100}%;width:${Math.max(s.d/96*100,.8)}%;background:${s.err?'var(--bad)':col[s.type]}"></i></span><span style="width:40px;text-align:right;color:var(--muted);font-size:12px">${s.d}s</span></div>`).join("");
+  $("#spans").onclick = e => {
+    const r = e.target.closest(".span"); if(!r) return; const s = spans[+r.dataset.i];
+    pane.querySelectorAll(".span").forEach(x=>x.classList.toggle("sel",x===r));
+    $("#detail").innerHTML = `<dt>名稱</dt><dd>${esc(s.n)}</dd><dt>類型</dt><dd>${s.type}</dd><dt>開始 / 時長</dt><dd>${s.s}s / ${s.d}s（${Math.round(s.d/96*100)}%）</dd><dt>Tokens</dt><dd>${s.tok}</dd><dt>輸出</dt><dd>${esc(s.io)}</dd><dt>狀態</dt><dd style="color:${s.err?'var(--bad)':'var(--ok)'}">${s.err?'ERROR':'OK'}</dd>`;
+  };
+  const a = {};
+  const check = () => {
+    if (a.q1===undefined || a.q2===undefined) return;
+    const ok1 = a.q1===1, ok2 = a.q2===1;
+    $("#res").innerHTML = (ok1&&ok2) ? `<span style="color:var(--ok)"><b>✅ 正確！</b></span> 兩次 npm test 共 63 秒（約 66%）。只跑相關測試、或在 CLAUDE.md 寫明單檔測試指令，可大幅縮短時間。 ${nextToQuiz()}`
+      : `<span style="color:var(--bad)">還不對。</span> ${!ok1?'試著加總每類 span 的時長。':''} ${!ok2?'針對最大的瓶頸下手。':''}`;
+    if (ok1&&ok2) labDone(m,pane);
+  };
+  ["q1","q2"].forEach(q => $("#"+q).onclick = e => { const b = e.target.closest("button"); if(!b) return; a[q] = +b.dataset.v; $("#"+q).querySelectorAll("button").forEach(x=>x.classList.toggle("sel",x===b)); check(); });
+},
+/* 8. 背景 Agent 設計 */
+"design-bg"(pane, m){
+  const opts = {
+    trigger:["（請選擇）","每當 issue 被標上 agent-fix 標籤","每 5 分鐘掃描所有 issue 並嘗試修全部","有人在任何頻道提到 bug 時"],
+    scope:["（請選擇）","只修改 src/ 下的程式碼，不碰 infra/ 與 migrations/","整個 repo 與所有雲端資源","不限制"],
+    stop:["（請選擇）","最多 3 次測試失敗或 30 分鐘後停止並回報","一直重試直到成功","不設上限"],
+    output:["（請選擇）","開 draft PR 並附上修改說明與測試結果","直接 push 到 main","直接部署到正式環境"],
+    env:["（請選擇）","隔離的雲端沙箱，只有 repo 的寫入權限","工程師的筆電，使用其個人憑證","正式伺服器"],
+    notify:["（請選擇）","在 issue 留言回報結果，失敗時標記負責人","不通知","每一步都寄 email 給全公司"]
+  };
+  const labels = {trigger:"⚡ 觸發條件",scope:"📁 範圍",stop:"🛑 停止條件",output:"📦 產出形式",env:"🧱 執行環境",notify:"🔔 通知"};
+  const v = state.bg || {};
+  pane.innerHTML = `<div class="card"><h3>練習：設計一個「自動修 bug」背景 Agent</h3>
+    <p>為每個面向選擇最合適的設定，下方會即時產生設定檔與風險評估。</p>
+    <div class="grid2">${Object.keys(opts).map(k=>`<div class="field"><label for="bg-${k}">${labels[k]}</label><select id="bg-${k}" data-k="${k}">${opts[k].map((o,i)=>`<option value="${i}">${o}</option>`).join("")}</select></div>`).join("")}</div>
+    <div class="row" style="justify-content:space-between"><b>安全與可靠度</b><span id="rlabel" style="font-size:14px"></span></div>
+    <div class="meter" style="margin:6px 0 14px"><i id="rmeter"></i></div>
+    <pre id="yaml"></pre><p id="res"></p></div>`;
+  Object.keys(opts).forEach(k => { $("#bg-"+k).value = v[k]||0; });
+  const upd = () => {
+    Object.keys(opts).forEach(k => v[k] = +$("#bg-"+k).value); state.bg = v; save();
+    const keys = Object.keys(opts), good = keys.filter(k=>v[k]===1).length, unset = keys.filter(k=>!v[k]).length;
+    const mt = $("#rmeter"); mt.style.width = (good/6*100)+"%"; mt.style.background = good<3?'var(--bad)':good<6?'var(--warn)':'var(--ok)';
+    const bad = keys.filter(k=>v[k]>1).map(k=>labels[k].slice(2).trim());
+    $("#rlabel").textContent = unset ? `尚有 ${unset} 項未設定` : bad.length ? "風險：" + bad.join("、") : "設計穩健 ✅";
+    $("#yaml").textContent = `name: auto-bugfix-agent\n` + keys.map(k=>`${k}: ${v[k]?opts[k][v[k]]:'# 未設定'}`).join("\n");
+    if (good===6) { $("#res").innerHTML = `✅ 很棒的設計！範圍明確、有停止條件、產出可審查、環境隔離、並通知對的人。 ${nextToQuiz()}`; labDone(m,pane); }
+    else $("#res").innerHTML = "";
+  };
+  pane.querySelectorAll("select").forEach(s => s.onchange = upd);
+  upd();
+},
+/* 9 */
+"classify-decision"(pane, m){ classify(pane, m, {
+  title:"練習：誰來做這個決定？", intro:"依照「影響 × 可逆性」矩陣，為每個情境選擇正確的決策模式。",
+  options:["Agent 自主","做了再告知","Agent 提案・人審查","人類決定"],
+  items:[
+    {t:"把一個區域變數從 <code>tmp</code> 改名為 <code>userCount</code>",a:0,why:"低影響、可逆 → Agent 自主"},
+    {t:"將專案從 REST 改為 GraphQL 架構",a:2,why:"高影響但可逆（還在分支上）→ 提案並審查"},
+    {t:"清除本機的建置快取 <code>.next/cache</code>",a:1,why:"低影響、不可逆但可重建 → 做了再告知"},
+    {t:"對所有付費客戶寄出價格調漲通知信",a:3,why:"高影響、不可逆、對外 → 人類決定"},
+    {t:"新增一個公開的 API endpoint",a:2,why:"高影響（對外契約）但上線前可修改 → 提案審查"},
+    {t:"從正式資料庫刪除 90 天前的使用者紀錄",a:3,why:"高影響、不可逆 → 人類決定"},
+    {t:"修正 README 中的錯字",a:0,why:"低影響、可逆 → Agent 自主"}
+  ]});
+},
+/* 10. 擴展模擬 */
+scale(pane, m){
+  const s = state.sc || {agents:4, auto:30, pr:300, rev:6};
+  pane.innerHTML = `<div class="card"><h3>練習：Agent 團隊吞吐量模擬器</h3>
+    <p>每個 Agent 每天產出 3 個 PR。人類審查者每天有固定的審查小時數，審查時間與 PR 大小成正比，但自動驗證能減少需要人仔細看的比例。<br><b>目標：每天合併 ≥ 20 個 PR，且待審佇列不增加。</b></p>
+    <div class="grid2">
+      <div class="field"><label>🤖 Agent 數量：<span id="v-agents"></span></label><input type="range" id="agents" min="1" max="20" value="${s.agents}"></div>
+      <div class="field"><label>🧪 自動驗證覆蓋率：<span id="v-auto"></span>%</label><input type="range" id="auto" min="0" max="90" step="10" value="${s.auto}"></div>
+      <div class="field"><label>📏 平均 PR 大小：<span id="v-pr"></span> 行</label><input type="range" id="pr" min="50" max="800" step="50" value="${s.pr}"></div>
+      <div class="field"><label>👀 每天人類審查時數：<span id="v-rev"></span> 小時</label><input type="range" id="rev" min="2" max="16" value="${s.rev}"></div>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="v" id="o-prod">–</div><div class="k">每天產出 PR</div></div>
+      <div class="stat"><div class="v" id="o-cap">–</div><div class="k">每天可審查 PR</div></div>
+      <div class="stat"><div class="v" id="o-merge">–</div><div class="k">每天合併 PR</div></div>
+      <div class="stat"><div class="v" id="o-q">–</div><div class="k">佇列每天變化</div></div>
+    </div>
+    <div class="callout" id="bottleneck"></div><p id="res"></p></div>`;
+  const upd = () => {
+    ["agents","auto","pr","rev"].forEach(k => { s[k] = +$("#"+k).value; $("#v-"+k).textContent = s[k]; });
+    state.sc = s; save();
+    const produced = s.agents * 3;
+    // 每 PR 需要的人工分鐘數：大小 / 10 行/分，乘上未被自動驗證涵蓋的比例，最少 3 分鐘
+    const minsPerPR = Math.max(3, (s.pr/10) * (1 - s.auto/100));
+    const cap = Math.floor(s.rev*60 / minsPerPR);
+    // 一次成功率：PR 越大越容易被退回
+    const passRate = Math.max(.4, Math.min(.95, .95 - (s.pr-100)/1400 + s.auto/400));
+    const reviewed = Math.min(produced, cap);
+    const merged = Math.floor(reviewed * passRate);
+    const dq = produced - cap;
+    $("#o-prod").textContent = produced; $("#o-cap").textContent = cap; $("#o-merge").textContent = merged;
+    $("#o-q").textContent = dq>0 ? "+"+dq : "0"; $("#o-q").style.color = dq>0?'var(--bad)':'var(--ok)';
+    const bn = $("#bottleneck");
+    if (dq > 0) { bn.className = "callout bad"; bn.innerHTML = `🚧 <b>瓶頸：人類審查。</b>再增加 Agent 只會讓佇列更長。試著縮小 PR 或提高自動驗證覆蓋率。`; }
+    else if (produced < 20/passRate) { bn.className = "callout warn"; bn.innerHTML = `⚙️ <b>瓶頸：產出量。</b>審查還有餘裕，可以增加 Agent 數量。`; }
+    else { bn.className = "callout ok"; bn.innerHTML = `✅ 產出與審查能力平衡。一次成功率約 ${Math.round(passRate*100)}%。`; }
+    if (merged >= 20 && dq <= 0) { $("#res").innerHTML = `🎉 <b>達成目標！</b>注意你調整的槓桿：縮小 PR 與提高自動驗證，往往比單純加 Agent 更有效。 ${nextToQuiz()}`; labDone(m,pane); }
+    else $("#res").innerHTML = "";
+  };
+  pane.querySelectorAll("input[type=range]").forEach(r => r.oninput = upd);
+  upd();
+}
+};
+
+function shuffle(a){ for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];} return a; }
+
+/* ============================================================
+   結業證書
+   ============================================================ */
+function renderCert(){
+  const n = MODULES.filter(m=>state.done[m.id]).length;
+  if (n < 10) {
+    $("#view").innerHTML = `<div class="eyebrow">結業證書</div><h2 class="title">還差 ${10-n} 堂課</h2>
+      <p class="subtitle">完成每堂課的互動練習並在小測驗答對至少 2 題，即可解鎖證書。</p>
+      <div class="card">${MODULES.map(m=>`<div class="check"><span>${state.done[m.id]?'✅':'⬜'}</span><span style="flex:1">${m.id}. ${m.title} <small style="color:var(--muted)">— 練習 ${state.lab[m.id]?'✓':'✗'}・測驗 ${state.quiz[m.id]||0}/3</small></span></div>`).join("")}</div>`;
+    return;
+  }
+  const total = MODULES.reduce((a,m)=>a+(state.quiz[m.id]||0),0);
+  $("#view").innerHTML = `<div class="cert"><div style="font-size:44px">🏅</div><div class="eyebrow">Certificate of Completion</div>
+    <h2>AI Agent 協作課程</h2><p>已完成全部 10 堂模組<br>從委派、脈絡、規劃，到編排、驗證、治理、觀測、自主化、協作與規模化。</p>
+    <div class="stats" style="max-width:420px;margin:16px auto"><div class="stat"><div class="v">10/10</div><div class="k">完成課程</div></div><div class="stat"><div class="v">${total}/30</div><div class="k">測驗總分</div></div></div>
+    <p style="color:var(--muted);font-size:14px">${new Date().toLocaleDateString('zh-TW')}</p></div>`;
+}
+
+/* ============================================================
+   其他控制
+   ============================================================ */
+$("#themeBtn").onclick = () => {
+  const r = document.documentElement;
+  const dark = r.dataset.theme ? r.dataset.theme==="dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  r.dataset.theme = dark ? "light" : "dark";
+  try{ localStorage.setItem(KEY+"-theme", r.dataset.theme); }catch(e){}
+};
+$("#resetBtn").onclick = () => { if (confirm("確定要清除所有學習進度嗎？")) { state = {cur:1, tab:"learn", done:{}, lab:{}, quiz:{}}; save(); render(); } };
+const closeMenu = () => { $("#aside").classList.remove("open"); $("#scrim").classList.add("hidden"); };
+$("#menuBtn").onclick = () => { $("#aside").classList.add("open"); $("#scrim").classList.remove("hidden"); };
+$("#scrim").onclick = closeMenu;
+
+render();
+</script>
+</body>
+</html>
