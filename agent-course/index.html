@@ -17,14 +17,14 @@
     --bg:#161513; --surface:#1f1e1b; --surface-2:#2a2825; --text:#ecebe6; --muted:#a19d95;
     --border:#37342f; --accent:#e47a4f; --accent-soft:#3a2519; --ok:#5fbf86; --ok-soft:#1c3226;
     --bad:#e47373; --bad-soft:#3a1f1f; --warn:#e0a84a; --warn-soft:#382a14; --info:#78a6e6; --info-soft:#1c2a3e;
-    --shadow:0 1px 2px rgba(0,0,0,.3);
+    --shadow:0 1px 2px rgba(0,0,0,.3); color-scheme:dark;
   }
 }
 :root[data-theme="dark"]{
   --bg:#161513; --surface:#1f1e1b; --surface-2:#2a2825; --text:#ecebe6; --muted:#a19d95;
   --border:#37342f; --accent:#e47a4f; --accent-soft:#3a2519; --ok:#5fbf86; --ok-soft:#1c3226;
   --bad:#e47373; --bad-soft:#3a1f1f; --warn:#e0a84a; --warn-soft:#382a14; --info:#78a6e6; --info-soft:#1c2a3e;
-  --shadow:0 1px 2px rgba(0,0,0,.3);
+  --shadow:0 1px 2px rgba(0,0,0,.3); color-scheme:dark;
 }
 *{box-sizing:border-box}
 html,body{margin:0}
@@ -175,7 +175,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
   aside{position:fixed;inset:0 auto 0 0;width:290px;z-index:20;transform:translateX(-100%);transition:transform .25s;box-shadow:var(--shadow)}
   aside.open{transform:none}
   .scrim{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:15}
-  main{padding:16px 16px 60px}
+  main{padding-block:16px 60px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
   .mobile-top{display:flex;align-items:center;gap:10px;margin-bottom:14px}
   h2.title{font-size:24px}
   .span .name{width:130px}
@@ -1017,7 +1017,17 @@ $("#themeBtn").onclick = () => {
   r.dataset.theme = dark ? "light" : "dark";
   try{ localStorage.setItem(KEY+"-theme", r.dataset.theme); }catch(e){}
 };
-$("#resetBtn").onclick = () => { if (confirm("確定要清除所有學習進度嗎？")) { state = {cur:1, tab:"learn", done:{}, lab:{}, quiz:{}}; save(); render(); } };
+let resetArmed = null;
+$("#resetBtn").onclick = () => {
+  const b = $("#resetBtn");
+  if (!resetArmed) {
+    b.textContent = "再按一次確認清除"; b.style.color = "var(--bad)";
+    resetArmed = setTimeout(() => { resetArmed = null; b.textContent = "重設進度"; b.style.color = ""; }, 3000);
+    return;
+  }
+  clearTimeout(resetArmed); resetArmed = null; b.textContent = "重設進度"; b.style.color = "";
+  state = {cur:1, tab:"learn", done:{}, lab:{}, quiz:{}}; save(); render();
+};
 const closeMenu = () => { $("#aside").classList.remove("open"); $("#scrim").classList.add("hidden"); };
 $("#menuBtn").onclick = () => { $("#aside").classList.add("open"); $("#scrim").classList.remove("hidden"); };
 $("#scrim").onclick = closeMenu;
